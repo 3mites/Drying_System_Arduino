@@ -1,0 +1,12 @@
+<RCC>
+  <qresource prefix="images">
+    <file>left-arrow.png</file>
+    <file>right-arrow.png</file>
+    <file>Exhaust.png</file>
+    <file>humidity.png</file>
+    <file>Intake.png</file>
+    <file>thermometer.png</file>
+    <file>humidity.png</file>
+    <file>thermometer.png</file>
+  </qresource>
+</RCC>

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'lcd_display.ui'
+# Form implementation generated from reading ui file 'lcd_display_temperature.ui'
 #
 # Created by: PyQt5 UI code generator 5.15.11
 #
@@ -10,7 +10,6 @@
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 import sys,res
-
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
@@ -34,7 +33,7 @@ class Ui_MainWindow(object):
         self.label_3 = QtWidgets.QLabel(self.verticalLayoutWidget)
         self.label_3.setMaximumSize(QtCore.QSize(100, 100))
         self.label_3.setText("")
-        self.label_3.setPixmap(QtGui.QPixmap(":/images/thermometer.png"))
+        self.label_3.setPixmap(QtGui.QPixmap(":/images/T1.png"))
         self.label_3.setScaledContents(True)
         self.label_3.setObjectName("label_3")
         self.verticalLayout_2.addWidget(self.label_3)
@@ -48,7 +47,7 @@ class Ui_MainWindow(object):
         self.label_2.setMaximumSize(QtCore.QSize(100, 100))
         self.label_2.setAutoFillBackground(False)
         self.label_2.setText("")
-        self.label_2.setPixmap(QtGui.QPixmap(":/images/humidity.png"))
+        self.label_2.setPixmap(QtGui.QPixmap(":/images/T2.png"))
         self.label_2.setScaledContents(True)
         self.label_2.setObjectName("label_2")
         self.verticalLayout_2.addWidget(self.label_2)
@@ -67,7 +66,7 @@ class Ui_MainWindow(object):
         self.label_4 = QtWidgets.QLabel(self.verticalLayoutWidget_2)
         self.label_4.setMaximumSize(QtCore.QSize(100, 100))
         self.label_4.setText("")
-        self.label_4.setPixmap(QtGui.QPixmap(":/images/Intake.png"))
+        self.label_4.setPixmap(QtGui.QPixmap(":/images/T3.png"))
         self.label_4.setScaledContents(True)
         self.label_4.setObjectName("label_4")
         self.verticalLayout_4.addWidget(self.label_4)
@@ -81,7 +80,7 @@ class Ui_MainWindow(object):
         self.label_5.setMaximumSize(QtCore.QSize(100, 100))
         self.label_5.setAutoFillBackground(False)
         self.label_5.setText("")
-        self.label_5.setPixmap(QtGui.QPixmap(":/images/Exhaust.png"))
+        self.label_5.setPixmap(QtGui.QPixmap(":/images/T4.png"))
         self.label_5.setScaledContents(True)
         self.label_5.setObjectName("label_5")
         self.verticalLayout_4.addWidget(self.label_5)
@@ -169,7 +168,7 @@ class Ui_MainWindow(object):
         self.pushButton.setObjectName("pushButton")
         self.verticalLayout_16.addWidget(self.pushButton)
         self.verticalLayoutWidget_4 = QtWidgets.QWidget(self.widget)
-        self.verticalLayoutWidget_4.setGeometry(QtCore.QRect(190, 10, 381, 41))
+        self.verticalLayoutWidget_4.setGeometry(QtCore.QRect(150, 10, 504, 41))
         self.verticalLayoutWidget_4.setObjectName("verticalLayoutWidget_4")
         self.verticalLayout_6 = QtWidgets.QVBoxLayout(self.verticalLayoutWidget_4)
         self.verticalLayout_6.setContentsMargins(0, 0, 0, 0)
@@ -207,8 +206,8 @@ class Ui_MainWindow(object):
         self.label_6.setText(_translate("MainWindow", "100°C"))
         self.label_11.setText(_translate("MainWindow", "medium"))
         self.label_12.setText(_translate("MainWindow", "medium"))
-        self.label_7.setText(_translate("MainWindow", "MaizeDry Corn Drying System"))
-        self.label_8.setText(_translate("MainWindow", "ETA:"))
+        self.label_7.setText(_translate("MainWindow", "Ambient Temperature Plenum Chamber"))
+        self.label_8.setText(_translate("MainWindow", "Average: Average"))
 
 
 if __name__ == "__main__":

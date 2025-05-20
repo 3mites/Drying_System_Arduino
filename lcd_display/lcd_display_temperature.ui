@@ -52,7 +52,7 @@ border-radius:50px;</string>
          <string/>
         </property>
         <property name="pixmap">
-         <pixmap resource="icon/res.qrc">:/images/thermometer.png</pixmap>
+         <pixmap resource="icon/res.qrc">:/images/T1.png</pixmap>
         </property>
         <property name="scaledContents">
          <bool>true</bool>
@@ -113,7 +113,7 @@ border-radius:50px;</string>
          <string/>
         </property>
         <property name="pixmap">
-         <pixmap resource="icon/res.qrc">:/images/humidity.png</pixmap>
+         <pixmap resource="icon/res.qrc">:/images/T2.png</pixmap>
         </property>
         <property name="scaledContents">
          <bool>true</bool>
@@ -186,7 +186,7 @@ border-radius:50px;</string>
          <string/>
         </property>
         <property name="pixmap">
-         <pixmap resource="icon/res.qrc">:/images/Intake.png</pixmap>
+         <pixmap resource="icon/res.qrc">:/images/T3.png</pixmap>
         </property>
         <property name="scaledContents">
          <bool>true</bool>
@@ -247,7 +247,7 @@ border-radius:50px;</string>
          <string/>
         </property>
         <property name="pixmap">
-         <pixmap resource="icon/res.qrc">:/images/Exhaust.png</pixmap>
+         <pixmap resource="icon/res.qrc">:/images/T4.png</pixmap>
         </property>
         <property name="scaledContents">
          <bool>true</bool>
@@ -449,9 +449,9 @@ border-radius:50px;</string>
     <widget class="QWidget" name="verticalLayoutWidget_4">
      <property name="geometry">
       <rect>
-       <x>190</x>
+       <x>150</x>
        <y>10</y>
-       <width>381</width>
+       <width>504</width>
        <height>41</height>
       </rect>
      </property>
@@ -464,7 +464,7 @@ border-radius:50px;</string>
          </font>
         </property>
         <property name="text">
-         <string>MaizeDry Corn Drying System</string>
+         <string>Ambient Temperature Plenum Chamber</string>
         </property>
        </widget>
       </item>
@@ -488,7 +488,7 @@ border-radius:50px;</string>
          </font>
         </property>
         <property name="text">
-         <string>ETA:</string>
+         <string>Average: Average</string>
         </property>
        </widget>
       </item>

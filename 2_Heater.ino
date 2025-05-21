@@ -48,7 +48,6 @@ double ambientTemp = 0;
 double lastValidAmbient = 0;
 
 volatile bool doPhaseControl = false;
-double adjustTemperature = 0;
 
 // Create thermocouple objects
 Adafruit_MAX31855 thermocouple(thermoCLK, thermoCS, thermoDO);
@@ -113,14 +112,14 @@ void loop() {
   }
 
   // --- TRIAC control based on ambient temperature ---
-  if (ambientTemp >= adjustTemperature) {
+  if (ambientTemp >= 80.0) {
     if (triacEnabled) {
       Serial.println("TRIAC OFF: Ambient too hot (>80°C)");
     }
     triacEnabled = false;
     doPhaseControl = false;
     digitalWrite(firingAnglePin, LOW);
-  } else if (ambientTemp < 30.0) {
+  } else if (ambientTemp < 60.0) {
     if (!triacEnabled) {
       Serial.println("TRIAC ON: Ambient cooled down (<60°C)");
     }

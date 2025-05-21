@@ -2,6 +2,8 @@
 #include <SPI.h>
 #include <max6675.h>
 
+//hysteresis of 250
+
 const int Gate1 = 44;
 const int Gate2 = 45;
 const int Gate3 = 46;
@@ -74,7 +76,7 @@ void controlFan() {
   unsigned long currentMillis = millis();
   if (currentMillis - previousMillis >= interval) {
     previousMillis = currentMillis;
-    if (temperature >= 200.0) {
+    if (temperature >= 100.0) {
       pwmValue = lowPWM;
       speedLabel = "LOW (20%)";
     } else {
@@ -83,6 +85,7 @@ void controlFan() {
     }
   }
   analogWrite(Gate3, pwmValue);
+  analogWrite(Gate2, highPWM);
 }
 
 void loop() {
@@ -128,6 +131,7 @@ void loop() {
     if (temperature >= 200.0) {
       // Maintain temperature by throttling power with phase control delay
       doPhaseControl = false;
+      digitalWrite(firingAnglePin, LOW);
     } else {
       // Heating up: less delay (more power)
       doPhaseControl = true;

@@ -7,6 +7,8 @@ from lcd_display import Ui_MainWindow as Ui_FirstWindow
 from lcd_display_temperature import Ui_MainWindow as Ui_SecondWindow
 from lcd_display_temperature_drying import Ui_MainWindow as Ui_TempDryingWindow
 from lcd_display_humidity import Ui_MainWindow as Ui_ThirdWindow
+from calculate_emc import MoistureEstimator
+
 
 class ThirdWindow(QtWidgets.QMainWindow):
     def __init__(self, first_window):
@@ -27,13 +29,11 @@ class ThirdWindow(QtWidgets.QMainWindow):
         self.first_window.temp_drying_window.show()
         self.close()
 
-    
     @QtCore.pyqtSlot(str, str, str)
     def update_humidity_labels(self, h1, h2, h_ave):
         self.ui.label_6.setText(f"{h1} %")
         self.ui.label_12.setText(f"{h2} %")
         self.ui.label_8.setText(f"Average: {h_ave} %")
-
 
 
 class SecondWindow(QtWidgets.QMainWindow):
@@ -56,8 +56,6 @@ class SecondWindow(QtWidgets.QMainWindow):
         self.first_window.temp_drying_window.show()
         self.close()
 
-
-
     def go_to_first(self):
         self.first_window.show()
         self.close()
@@ -70,11 +68,14 @@ class SecondWindow(QtWidgets.QMainWindow):
         self.ui.label_11.setText(f"{t4} °C")
         self.ui.label_8.setText(f"Average: {t_ave_first} °C")
 
+
 class FirstWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
         self.ui = Ui_FirstWindow()
         self.ui.setupUi(self)
+
+        self.last_valid_drying_seconds = None
 
         self.second_window = None
         self.third_window = None
@@ -181,15 +182,32 @@ class FirstWindow(QtWidgets.QMainWindow):
         except serial.SerialException as e:
             print("Serial error:", e)
 
-
-                
-
     @QtCore.pyqtSlot(str, str, str, str)
     def update_labels(self, t_ave_2nd, h_ave, pwm_2, pwm_1):
         self.ui.label.setText(f"{t_ave_2nd} °C")
         self.ui.label_6.setText(f"{h_ave} %")
         self.ui.label_12.setText(f"{pwm_2}")
         self.ui.label_11.setText(f"{pwm_1}")
+
+        try:
+            # Convert input strings to float
+            temperature = float(t_ave_2nd)
+            humidity = float(h_ave)
+
+            # Estimate drying time
+            estimator = MoistureEstimator(temperature, humidity)
+            drying_seconds = estimator.get_drying_time_seconds()
+
+            # Store and display the latest valid result
+            self.last_valid_drying_seconds = drying_seconds
+            self.ui.label_8.setText(f"Dry Time: {drying_seconds} s")
+
+        except Exception as e:
+            print("Error estimating moisture drying time:", e)
+            if self.last_valid_drying_seconds is not None:
+                self.ui.label_8.setText(f"Dry Time: {self.last_valid_drying_seconds} s")
+            else:
+                self.ui.label_8.setText("Dry Time: Error")
 
     def go_to_second(self):
         if self.second_window is None:
@@ -209,7 +227,7 @@ class TempDryingWindow(QtWidgets.QMainWindow):
         self.ui.pushButton.setEnabled(True)
         self.ui.pushButton_2.setEnabled(True)
 
-        self.ui.pushButton.clicked.connect(self.go_to_second)   # Previous
+        self.ui.pushButton.clicked.connect(self.go_to_second)  # Previous
         self.ui.pushButton_2.clicked.connect(self.go_to_third)  # Next
 
     def go_to_second(self):
@@ -218,14 +236,12 @@ class TempDryingWindow(QtWidgets.QMainWindow):
         self.first_window.second_window.show()
         self.close()
 
-
     def go_to_third(self):
         if self.first_window.third_window is None:
             self.first_window.third_window = ThirdWindow(self.first_window)
         self.first_window.third_window.show()
         self.close()
 
-    
     @QtCore.pyqtSlot(str, str, str, str, str)
     def update_temperature_labels(self, t5, t6, t7, t8, t_ave_2nd):
         self.ui.label.setText(f"{t5} \u00B0C")
@@ -233,8 +249,6 @@ class TempDryingWindow(QtWidgets.QMainWindow):
         self.ui.label_12.setText(f"{t7} \u00B0C")
         self.ui.label_11.setText(f"{t8} \u00B0C")
         self.ui.label_8.setText(f"Average: {t_ave_2nd} \u00B0C")
-
-
 
 
 app = QtWidgets.QApplication(sys.argv)

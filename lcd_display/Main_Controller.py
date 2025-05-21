@@ -2,9 +2,10 @@ import sys
 import serial
 import threading
 from PyQt5 import QtWidgets, QtCore
-
+from FLC_MaizeDry import TemperatureFuzzyController
 from lcd_display import Ui_MainWindow as Ui_FirstWindow
 from lcd_display_temperature import Ui_MainWindow as Ui_SecondWindow
+from lcd_display_temperature_drying import Ui_MainWindow as Ui_TempDryingWindow
 from lcd_display_humidity import Ui_MainWindow as Ui_ThirdWindow
 
 class ThirdWindow(QtWidgets.QMainWindow):
@@ -41,8 +42,8 @@ class SecondWindow(QtWidgets.QMainWindow):
         self.ui.pushButton.clicked.connect(self.go_to_first)
 
     def go_to_third(self):
-        self.third_window = ThirdWindow(self.first_window)
-        self.third_window.show()
+        self.temp_drying_window = TempDryingWindow(self.first_window)
+        self.temp_drying_window.show()
         self.close()
 
     def go_to_first(self):
@@ -66,7 +67,7 @@ class FirstWindow(QtWidgets.QMainWindow):
 
     def read_serial_data(self):
         try:
-            ser = serial.Serial('COM5', 9600, timeout=1)
+            ser = serial.Serial('/dev/ttyUSB0', 9600, timeout=1)
             while True:
                 line = ser.readline().decode().strip()
                 if line.startswith("T:") and "H:" in line:
@@ -87,13 +88,37 @@ class FirstWindow(QtWidgets.QMainWindow):
 
     @QtCore.pyqtSlot(str, str)
     def update_labels(self, temperature, humidity):
-        self.ui.label.setText(f"{temperature} °C")
+        self.ui.label.setText(f"{temperature} Â°C")
         self.ui.label_6.setText(f"{humidity} %")
 
     def go_to_second(self):
         self.second_window = SecondWindow(self)
         self.second_window.show()
         self.hide()  # Hide instead of close
+
+class TempDryingWindow(QtWidgets.QMainWindow):
+    def __init__(self, first_window):
+        super().__init__()
+        self.ui = Ui_TempDryingWindow()
+        self.ui.setupUi(self)
+
+        self.first_window = first_window
+
+        self.ui.pushButton.setEnabled(True)
+        self.ui.pushButton_2.setEnabled(True)
+
+        self.ui.pushButton.clicked.connect(self.go_to_second)   # Previous
+        self.ui.pushButton_2.clicked.connect(self.go_to_third)  # Next
+
+    def go_to_second(self):
+        self.second_window = SecondWindow(self.first_window)
+        self.second_window.show()
+        self.close()
+
+    def go_to_third(self):
+        self.third_window = ThirdWindow(self.first_window)
+        self.third_window.show()
+        self.close()
 
 
 

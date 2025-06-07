@@ -19,7 +19,7 @@ class ThirdWindow(QtWidgets.QMainWindow):
         self.ui.setupUi(self)
         self.center_window()
         self.first_window = first_window
-
+        self.resize_to_fit_screen()
         self.ui.pushButton_2.setEnabled(False)
         self.ui.pushButton.setEnabled(True)
 
@@ -30,6 +30,11 @@ class ThirdWindow(QtWidgets.QMainWindow):
             self.first_window.temp_drying_window = TempDryingWindow(self.first_window)
         self.first_window.temp_drying_window.show()
         self.close()
+
+    def resize_to_fit_screen(self):
+        screen = QtWidgets.QApplication.primaryScreen()
+        screen_size = screen.availableGeometry().size()
+        self.resize(int(screen_size.width() * 0.8), int(screen_size.height() * 0.8))
 
     def center_window(self):
         screen = QtWidgets.QApplication.primaryScreen()
@@ -53,12 +58,17 @@ class SecondWindow(QtWidgets.QMainWindow):
         self.ui.setupUi(self)
         self.center_window()
         self.first_window = first_window
-
+        self.resize_to_fit_screen()
         self.ui.pushButton_2.setEnabled(True)
         self.ui.pushButton.setEnabled(True)
 
         self.ui.pushButton_2.clicked.connect(self.go_to_third)
         self.ui.pushButton.clicked.connect(self.go_to_first)
+
+    def resize_to_fit_screen(self):
+        screen = QtWidgets.QApplication.primaryScreen()
+        screen_size = screen.availableGeometry().size()
+        self.resize(int(screen_size.width() * 0.8), int(screen_size.height() * 0.8))
 
     def center_window(self):
         screen = QtWidgets.QApplication.primaryScreen()
@@ -99,7 +109,7 @@ class FirstWindow(QtWidgets.QMainWindow):
         self.second_window = None
         self.third_window = None
         self.temp_drying_window = None
-
+        self.resize_to_fit_screen()
         self.data_log = []
         self.excel_file = "serial_readings.xlsx"
 
@@ -111,6 +121,11 @@ class FirstWindow(QtWidgets.QMainWindow):
         self.serial_thread = threading.Thread(target=self.read_serial_data)
         self.serial_thread.daemon = True
         self.serial_thread.start()
+
+    def resize_to_fit_screen(self):
+        screen = QtWidgets.QApplication.primaryScreen()
+        screen_size = screen.availableGeometry().size()
+        self.resize(int(screen_size.width() * 0.8), int(screen_size.height() * 0.8))
 
     def center_window(self):
         screen = QtWidgets.QApplication.primaryScreen()
@@ -269,12 +284,17 @@ class TempDryingWindow(QtWidgets.QMainWindow):
         self.ui.setupUi(self)
         self.center_window()
         self.first_window = first_window
-
+        self.resize_to_fit_screen()
         self.ui.pushButton.setEnabled(True)
         self.ui.pushButton_2.setEnabled(True)
 
         self.ui.pushButton.clicked.connect(self.go_to_second)
         self.ui.pushButton_2.clicked.connect(self.go_to_third)
+
+    def resize_to_fit_screen(self):
+        screen = QtWidgets.QApplication.primaryScreen()
+        screen_size = screen.availableGeometry().size()
+        self.resize(int(screen_size.width() * 0.8), int(screen_size.height() * 0.8))
 
     def center_window(self):
         screen = QtWidgets.QApplication.primaryScreen()

@@ -17,7 +17,7 @@ class ThirdWindow(QtWidgets.QMainWindow):
         super().__init__()
         self.ui = Ui_ThirdWindow()
         self.ui.setupUi(self)
-
+        self.center_window()
         self.first_window = first_window
 
         self.ui.pushButton_2.setEnabled(False)
@@ -31,6 +31,14 @@ class ThirdWindow(QtWidgets.QMainWindow):
         self.first_window.temp_drying_window.show()
         self.close()
 
+    def center_window(self):
+        screen = QtWidgets.QApplication.primaryScreen()
+        screen_geometry = screen.availableGeometry()
+        window_geometry = self.frameGeometry()
+        center_point = screen_geometry.center()
+        window_geometry.moveCenter(center_point)
+        self.move(window_geometry.topLeft())
+
     @QtCore.pyqtSlot(str, str, str)
     def update_humidity_labels(self, h1, h2, h_ave):
         self.ui.label_6.setText(f"{h1} %")
@@ -43,7 +51,7 @@ class SecondWindow(QtWidgets.QMainWindow):
         super().__init__()
         self.ui = Ui_SecondWindow()
         self.ui.setupUi(self)
-
+        self.center_window()
         self.first_window = first_window
 
         self.ui.pushButton_2.setEnabled(True)
@@ -51,6 +59,14 @@ class SecondWindow(QtWidgets.QMainWindow):
 
         self.ui.pushButton_2.clicked.connect(self.go_to_third)
         self.ui.pushButton.clicked.connect(self.go_to_first)
+
+    def center_window(self):
+        screen = QtWidgets.QApplication.primaryScreen()
+        screen_geometry = screen.availableGeometry()
+        window_geometry = self.frameGeometry()
+        center_point = screen_geometry.center()
+        window_geometry.moveCenter(center_point)
+        self.move(window_geometry.topLeft())
 
     def go_to_third(self):
         if self.first_window.temp_drying_window is None:
@@ -76,6 +92,7 @@ class FirstWindow(QtWidgets.QMainWindow):
         super().__init__()
         self.ui = Ui_FirstWindow()
         self.ui.setupUi(self)
+        self.center_window()
 
         self.last_valid_drying_seconds = None
 
@@ -94,6 +111,14 @@ class FirstWindow(QtWidgets.QMainWindow):
         self.serial_thread = threading.Thread(target=self.read_serial_data)
         self.serial_thread.daemon = True
         self.serial_thread.start()
+
+    def center_window(self):
+        screen = QtWidgets.QApplication.primaryScreen()
+        screen_geometry = screen.availableGeometry()
+        window_geometry = self.frameGeometry()
+        center_point = screen_geometry.center()
+        window_geometry.moveCenter(center_point)
+        self.move(window_geometry.topLeft())
 
     def read_serial_data(self):
         try:
@@ -242,7 +267,7 @@ class TempDryingWindow(QtWidgets.QMainWindow):
         super().__init__()
         self.ui = Ui_TempDryingWindow()
         self.ui.setupUi(self)
-
+        self.center_window()
         self.first_window = first_window
 
         self.ui.pushButton.setEnabled(True)
@@ -250,6 +275,14 @@ class TempDryingWindow(QtWidgets.QMainWindow):
 
         self.ui.pushButton.clicked.connect(self.go_to_second)
         self.ui.pushButton_2.clicked.connect(self.go_to_third)
+
+    def center_window(self):
+        screen = QtWidgets.QApplication.primaryScreen()
+        screen_geometry = screen.availableGeometry()
+        window_geometry = self.frameGeometry()
+        center_point = screen_geometry.center()
+        window_geometry.moveCenter(center_point)
+        self.move(window_geometry.topLeft())
 
     def go_to_second(self):
         if self.first_window.second_window is None:

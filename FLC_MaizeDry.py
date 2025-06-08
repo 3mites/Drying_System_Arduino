@@ -1,88 +1,61 @@
 import numpy as np
 import skfuzzy as fuzz
-import matplotlib.pyplot as plt
 from skfuzzy import control as ctrl
 
-"""
-Set sensor input values will cause an error when moisture content is <13 since there is no rule for that
-One thing I think of doing is terminating the process once the moisture values become <13.5%
-Play with the values, when moisture value is above 18% fuzzy logic will suggest to increase the temperature
-and as it decays it will suggest to lower temperatures
-"""
-temperature_value = 35.3
-humidity_value = 10
+class TemperatureFuzzyController:
+    def __init__(self):
+        # Define fuzzy variables
+        self.temperature = ctrl.Antecedent(np.arange(25, 74, 1), 'temperature')
+        self.humidity = ctrl.Antecedent(np.arange(0, 91, 1), 'humidity')
+        self.temperature_adjustment = ctrl.Consequent(np.arange(25, 74, 1), 'temperature_adjustment')
 
-# Universal Set for Temperature and Moisture
-temperature = ctrl.Antecedent(np.arange(25, 74, 1), 'temperature')
-humidity = ctrl.Antecedent(np.arange(0,91,1), 'humidity')
+        # Membership functions
+        self.temperature['low'] = fuzz.trimf(self.temperature.universe, [25, 31, 36])
+        self.temperature['warm'] = fuzz.trimf(self.temperature.universe, [34, 43, 60])
+        self.temperature['high'] = fuzz.trimf(self.temperature.universe, [55, 70, 73])
 
-# Universal Set for Output; value of temperature adjustment
-temperature_adjustment = ctrl.Consequent(np.arange(25, 74, 1), 'temperature_adjustment')
+        self.humidity['low'] = fuzz.trimf(self.humidity.universe, [0, 30, 40])
+        self.humidity['average'] = fuzz.trimf(self.humidity.universe, [30, 50, 60])
+        self.humidity['high'] = fuzz.trimf(self.humidity.universe, [55, 60, 90])
 
-"""
-Universal Set, for choosing values that fuzzy logic can pick to adjust temperature accordingly
-#for low it will choose a value between 0 and 60 degrees celsius
-#for high it will choose a value between 40 and 100 degrees celsius
-# low = 0-41 degree celsius High = 40-100 degrees celsius""
-output_variable['low'] = fuzz.trimf(output_variable.universe, [0, 20, 60])
-output_variable['high'] = fuzz.trimf(output_variable.universe, [40, 80, 100])
-"""
+        self.temperature_adjustment['low'] = fuzz.trimf(self.temperature_adjustment.universe, [25, 31, 36])
+        self.temperature_adjustment['warm'] = fuzz.trimf(self.temperature_adjustment.universe, [34, 43, 60])
+        self.temperature_adjustment['high'] = fuzz.trimf(self.temperature_adjustment.universe, [55, 70, 73])
 
-# Membership Functions
-temperature['low'] = fuzz.trimf(temperature.universe, [25, 31, 36])
-temperature['warm'] = fuzz.trimf(temperature.universe, [34,43,60])
-temperature['high'] = fuzz.trimf(temperature.universe, [55,70,73])
+        # Define fuzzy rules
+        rule1 = ctrl.Rule((self.temperature['high'] | self.temperature['warm'] | self.temperature['low']) & self.humidity['high'],
+                          self.temperature_adjustment['low'])
+        rule2 = ctrl.Rule(self.temperature['high'] & self.humidity['low'], self.temperature_adjustment['high'])
+        rule3 = ctrl.Rule(self.temperature['high'] & self.humidity['average'], self.temperature_adjustment['warm'])
+        rule4 = ctrl.Rule(self.temperature['warm'] & self.humidity['low'], self.temperature_adjustment['high'])
+        rule5 = ctrl.Rule(self.temperature['warm'] & self.humidity['average'], self.temperature_adjustment['warm'])
+        rule6 = ctrl.Rule(self.temperature['low'] & self.humidity['low'], self.temperature_adjustment['high'])
+        rule7 = ctrl.Rule(self.temperature['low'] & self.humidity['average'], self.temperature_adjustment['warm'])
 
-humidity['low'] = fuzz.trimf(humidity.universe, [0,30,40])
-humidity['average'] = fuzz.trimf(humidity.universe, [30,50,60])
-humidity['high'] = fuzz.trimf(humidity.universe, [55,60,90])
+        # Control system
+        self.control_system = ctrl.ControlSystem([rule1, rule2, rule3, rule4, rule5, rule6, rule7])
+        self.simulation = ctrl.ControlSystemSimulation(self.control_system)
 
-temperature_adjustment['low'] = fuzz.trimf(temperature_adjustment.universe, [25, 31, 36])
-temperature_adjustment['warm'] = fuzz.trimf(temperature_adjustment.universe, [34,43,60])
-temperature_adjustment['high'] = fuzz.trimf(temperature_adjustment.universe, [55,70,73])
+        # Keep track of last successful output
+        self.last_output = None
 
+    def compute_adjustment(self, temperature_value, humidity_value):
+        try:
+            self.simulation.input['temperature'] = temperature_value
+            self.simulation.input['humidity'] = humidity_value
+            self.simulation.compute()
+            self.last_output = self.simulation.output['temperature_adjustment']
+        except Exception as e:
+            print(f"[Warning] Fuzzy computation error: {e}")
+            print("[Info] Using last known good adjustment value.")
+        return self.last_output
 
-#by default temperature is low if humiidity is high
-rule1_t = ctrl.Rule((temperature['high']|temperature['warm']|temperature['low']) & humidity['high'],
-                    temperature_adjustment['low'])
-
-rule2_t = ctrl.Rule(temperature['high'] & humidity['low'], temperature_adjustment['high'])
-
-rule3_t = ctrl.Rule(temperature['high'] & humidity['average'], temperature_adjustment['warm'])
-
-rule4_t = ctrl.Rule(temperature['warm'] & humidity['low'], temperature_adjustment['high'])
-
-rule5_t = ctrl.Rule(temperature['warm'] & humidity['average'], temperature_adjustment['warm'])
-
-rule6_t = ctrl.Rule(temperature['low'] & humidity['low'],temperature_adjustment['high'])
-
-rule7_t = ctrl.Rule(temperature['low'] & humidity['average'],temperature_adjustment['warm'])
-
-
-temperature_ctrl = ctrl.ControlSystem([rule1_t, rule2_t, rule3_t, rule4_t, rule5_t,rule6_t,rule7_t])
-
-
-# Deffuzification
-temperature_sim = ctrl.ControlSystemSimulation(temperature_ctrl)
-
-
-# Perform the simulation
-temperature_sim.input['temperature'] = temperature_value
-temperature_sim.input['humidity'] = humidity_value
-temperature_sim.compute()
-
-
-
-# Display the adjustment value
-print(f"Air Temperature Value: {temperature_value}")
-print(f"Humidity Value: {humidity_value}")
-print(f"Temperature Adjustment: {temperature_sim.output['temperature_adjustment']:.2f}")
-
-# Display the plots
-temperature.view(sim=temperature_sim)
-#moisture.view(sim=temperature_sim)
-humidity.view(sim=temperature_sim)
-temperature_adjustment.view(sim=temperature_sim)
-# Show the plots
-plt.show()
-
+# Example usage:
+if __name__ == "__main__":
+    fuzzy_ctrl = TemperatureFuzzyController()
+    test_values = [(35.3, 10), (80, 10), (36, 92)]  # Example test including edge/invalid inputs
+    for temp, hum in test_values:
+        adjustment = fuzzy_ctrl.compute_adjustment(temp, hum)
+        print(f"Input Temperature: {temp}")
+        print(f"Input Humidity: {hum}")
+        print(f"Calculated Temperature Adjustment: {adjustment:.2f}" if adjustment is not None else "No valid adjustment.")

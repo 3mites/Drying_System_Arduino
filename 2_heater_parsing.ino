@@ -4,8 +4,8 @@
 #include <DHT.h>
 
 // ----- Sensor Pins -----
-#define DHTPIN1 30
-#define DHTPIN2 31
+#define DHTPIN1 2
+#define DHTPIN2 3
 #define DHTTYPE DHT22
 DHT dht1(DHTPIN1, DHTTYPE);
 DHT dht2(DHTPIN2, DHTTYPE);
@@ -33,19 +33,17 @@ unsigned long lastPrintTime = 0;
 unsigned long lastPhasePrintTime = 0;
 
 // ----- MAX31855 -----
-const int thermo31855CLK = 11;
-const int thermo31855DO = 12;
-const int thermo31855CS = 53;
-Adafruit_MAX31855 thermocouple(thermo31855CLK, thermo31855CS, thermo31855DO);
+const int thermoCLK = 52;
+const int thermoCS = 53;
+const int thermoDO = 50;
+Adafruit_MAX31855 thermocouple(thermoCLK, thermoCS, thermoDO);
 double temperature = 0;
 double lastValidTemp = 0;
 
 // ----- MAX6675 -----
-const int thermoDO = 50;
-const int thermoCLK = 52;
 const int numSensors = 4;
-const int csPins_Drying[] = { 22, 23, 24, 25 };
-const int csPins_Plenum[] = { 26, 27, 28, 29 };
+const int csPins_Drying[] = {22, 23, 24, 25};
+const int csPins_Plenum[] = {26, 27, 28, 29};
 MAX6675* thermocouples_Drying[numSensors];
 MAX6675* thermocouples_Plenum[numSensors];
 float Temperatures[8];
@@ -75,6 +73,9 @@ String fanSpeedLabel;
 // ----- Control -----
 double adjustTemperature = 80.0;
 
+String serialInput = "";
+bool newCommand = false;
+
 void setup() {
   pinMode(Gate1, OUTPUT);
   pinMode(Gate2, OUTPUT);
@@ -99,6 +100,35 @@ void setup() {
 
 void loop() {
   unsigned long currentMillis = millis();
+  
+  while (Serial.available()) {
+    char inChar = (char)Serial.read();
+
+    if (inChar == '\n') {
+      newCommand = true;
+    } else {
+      serialInput += inChar;
+    }
+  }
+
+  if (newCommand) {
+    serialInput.trim();
+
+    if (serialInput.startsWith("ADJ")) {
+      int sepIndex = serialInput.indexOf('=');
+      if (sepIndex != -1 && sepIndex + 1 < serialInput.length()) {
+        String valueStr = serialInput.substring(sepIndex + 1);
+        double newTemp = valueStr.toFloat();
+
+        if (!isnan(newTemp)) {
+          adjustTemperature = newTemp;
+        }
+      }
+    }
+
+    serialInput = "";
+    newCommand = false;
+  }
 
   // --- Read humidity ---
   if (currentMillis - lastHumidityReadTime >= humidityReadInterval) {
@@ -127,7 +157,6 @@ void loop() {
     float totalTemp_Plenum = 0;
     int validCount_Plenum = 0;
 
-    // Read sensors and fill Temperatures array
     for (int i = 0; i < numSensors; i++) {
       float tempDrying = thermocouples_Drying[i]->readCelsius();
       if (!isnan(tempDrying) && tempDrying > 0 && tempDrying < 1024.0) {
@@ -145,50 +174,6 @@ void loop() {
         validCount_Plenum++;
       } else {
         Temperatures[i] = NAN;
-      }
-    }
-
-    // --- Harmonize Temperatures array ---
-    const float MAX_DIFF = 5.0;  // max allowed difference from average
-    float sumValidTemps = 0;
-    int countValidTemps = 0;
-
-    // Calculate average of all valid temperatures (both arrays)
-    for (int i = 0; i < 8; i++) {
-      if (!isnan(Temperatures[i])) {
-        sumValidTemps += Temperatures[i];
-        countValidTemps++;
-      }
-    }
-
-    if (countValidTemps > 0) {
-      float avgTemp = sumValidTemps / countValidTemps;
-
-      // Adjust values deviating more than MAX_DIFF
-      for (int i = 0; i < 8; i++) {
-        if (!isnan(Temperatures[i])) {
-          float diff = Temperatures[i] - avgTemp;
-          if (abs(diff) > MAX_DIFF) {
-            Temperatures[i] = avgTemp;
-          }
-        }
-      }
-    }
-
-    // Recalculate averages after harmonizing
-    totalTemp_Drying = 0;
-    validCount_Drying = 0;
-    totalTemp_Plenum = 0;
-    validCount_Plenum = 0;
-
-    for (int i = 0; i < numSensors; i++) {
-      if (!isnan(Temperatures[i + 4])) {
-        totalTemp_Drying += Temperatures[i + 4];
-        validCount_Drying++;
-      }
-      if (!isnan(Temperatures[i])) {
-        totalTemp_Plenum += Temperatures[i];
-        validCount_Plenum++;
       }
     }
 
@@ -266,54 +251,46 @@ void loop() {
   if (currentMillis - lastPrintTime >= printInterval) {
     lastPrintTime = currentMillis;
 
-    Serial.print("Temperature (MAX31855): ");
-    Serial.println(temperature);
-    Serial.print("Ambient Average Temp: ");
-    Serial.println(averageTemp);
-    Serial.print("Fan3 PWM (20%): ");
-    Serial.println(lowPWM);
-    Serial.print("Fan1 PWM: ");
-    Serial.println(pwmValue);
-    Serial.print("Fan1 Speed Label: ");
-    Serial.println(speedLabel);
+    Serial.print("Temperature (MAX31855): "); Serial.println(temperature);
+    Serial.print("Ambient Average Temp: "); Serial.println(averageTemp);
+    Serial.print("Fan3 PWM (20%): "); Serial.println(lowPWM);
+    Serial.print("Fan1 PWM: "); Serial.println(pwmValue);
+    Serial.print("Fan1 Speed Label: "); Serial.println(speedLabel);
 
     for (int i = 0; i < 8; i++) {
-      Serial.print("T");
-      Serial.print(i + 1);
-      Serial.print(":");
-      Serial.print(Temperatures[i], 2);
-      Serial.print(" ");
+      Serial.print("T"); Serial.print(i + 1); Serial.print(":");
+      Serial.print(Temperatures[i], 2); Serial.print(" ");
     }
 
-    Serial.print("H1:");
-    Serial.print(H1, 2);
-    Serial.print(" ");
-    Serial.print("H2:");
-    Serial.print(H2, 2);
-    Serial.print(" ");
-    Serial.print("t_ave_first:");
-    Serial.print(averageTemp, 2);
-    Serial.print(" ");
-    Serial.print("t_ave_2nd:");
-    Serial.print(averageTemp_Plenum, 2);
-    Serial.print(" ");
-    Serial.print("h_ave:");
-    Serial.print(h_ave, 2);
-    Serial.print(" ");
-    Serial.print("FanSpeed:");
-    Serial.println(fanSpeedLabel);
-  }
-}
-
-// --- Interrupt and Phase Control ---
-void zeroCrossDetect() {
-  // Zero crossing detected interrupt handler
-  if (triacEnabled) {
-    doPhaseControl = true;
+    Serial.print("H1:"); Serial.print(H1, 2); Serial.print(" ");
+    Serial.print("H2:"); Serial.print(H2, 2); Serial.print(" ");
+    Serial.print("t_ave_first:"); Serial.print(averageTemp, 2); Serial.print(" ");
+    Serial.print("t_ave_2nd:"); Serial.print(averageTemp_Plenum, 2); Serial.print(" ");
+    Serial.print("h_ave:"); Serial.print(h_ave, 2); Serial.print(" ");
+    Serial.print("pwm_1:"); Serial.print(pwm_1); Serial.print(" ");
+    Serial.print("pwm_2:"); Serial.println(pwm_2);
   }
 }
 
 void phaseControl() {
-  // Placeholder for your phase control routine
-  // Implement firing angle control here
+  float deviation = temperature - 200.0;
+  int delayMicros = map(deviation * 10, -100, 100, 1000, 8300);
+  delayMicros = constrain(delayMicros, 1000, 8300);
+
+  delayMicroseconds(delayMicros);
+  digitalWrite(firingAnglePin, HIGH);
+  delayMicroseconds(100);
+  digitalWrite(firingAnglePin, LOW);
+
+  if (millis() - lastPhasePrintTime >= printInterval) {
+    lastPhasePrintTime = millis();
+    Serial.print("TRIAC triggered after delay: ");
+    Serial.print(delayMicros); Serial.println(" µs");
+  }
+}
+
+void zeroCrossDetect() {
+  if (triacEnabled) {
+    doPhaseControl = true;
+  }
 }

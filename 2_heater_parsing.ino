@@ -44,8 +44,8 @@ double lastValidTemp = 0;
 const int thermoDO = 50;
 const int thermoCLK = 52;
 const int numSensors = 4;
-const int csPins_Drying[] = {22, 23, 24, 25};
-const int csPins_Plenum[] = {26, 27, 28, 29};
+const int csPins_Drying[] = { 22, 23, 24, 25 };
+const int csPins_Plenum[] = { 26, 27, 28, 29 };
 MAX6675* thermocouples_Drying[numSensors];
 MAX6675* thermocouples_Plenum[numSensors];
 float Temperatures[8];
@@ -266,23 +266,42 @@ void loop() {
   if (currentMillis - lastPrintTime >= printInterval) {
     lastPrintTime = currentMillis;
 
-    Serial.print("Temperature (MAX31855): "); Serial.println(temperature);
-    Serial.print("Ambient Average Temp: "); Serial.println(averageTemp);
-    Serial.print("Fan3 PWM (20%): "); Serial.println(lowPWM);
-    Serial.print("Fan1 PWM: "); Serial.println(pwmValue);
-    Serial.print("Fan1 Speed Label: "); Serial.println(speedLabel);
+    Serial.print("Temperature (MAX31855): ");
+    Serial.println(temperature);
+    Serial.print("Ambient Average Temp: ");
+    Serial.println(averageTemp);
+    Serial.print("Fan3 PWM (20%): ");
+    Serial.println(lowPWM);
+    Serial.print("Fan1 PWM: ");
+    Serial.println(pwmValue);
+    Serial.print("Fan1 Speed Label: ");
+    Serial.println(speedLabel);
 
     for (int i = 0; i < 8; i++) {
-      Serial.print("T"); Serial.print(i + 1); Serial.print(":");
-      Serial.print(Temperatures[i], 2); Serial.print(" ");
+      Serial.print("T");
+      Serial.print(i + 1);
+      Serial.print(":");
+      Serial.print(Temperatures[i], 2);
+      Serial.print(" ");
     }
 
-    Serial.print("H1:"); Serial.print(H1, 2); Serial.print(" ");
-    Serial.print("H2:"); Serial.print(H2, 2); Serial.print(" ");
-    Serial.print("t_ave_first:"); Serial.print(averageTemp, 2); Serial.print(" ");
-    Serial.print("t_ave_2nd:"); Serial.print(averageTemp_Plenum, 2); Serial.print(" ");
-    Serial.print("h_ave:"); Serial.print(h_ave, 2); Serial.print(" ");
-    Serial.print("FanSpeed:"); Serial.println(fanSpeedLabel);
+    Serial.print("H1:");
+    Serial.print(H1, 2);
+    Serial.print(" ");
+    Serial.print("H2:");
+    Serial.print(H2, 2);
+    Serial.print(" ");
+    Serial.print("t_ave_first:");
+    Serial.print(averageTemp, 2);
+    Serial.print(" ");
+    Serial.print("t_ave_2nd:");
+    Serial.print(averageTemp_Plenum, 2);
+    Serial.print(" ");
+    Serial.print("h_ave:");
+    Serial.print(h_ave, 2);
+    Serial.print(" ");
+    Serial.print("FanSpeed:");
+    Serial.println(fanSpeedLabel);
   }
 }
 

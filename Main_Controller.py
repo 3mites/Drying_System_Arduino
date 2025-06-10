@@ -1,6 +1,7 @@
 import sys
 import serial
 import threading
+import time
 import pandas as pd
 from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
 from datetime import datetime
@@ -112,35 +113,27 @@ class FirstWindow(QtWidgets.QMainWindow):
 
     def read_serial_data(self):
         try:
-            ser = serial.Serial('/dev/ttyUSB0', 9600, timeout=1)
+            ser = serial.Serial('COM6', 9600, timeout=1)
             self.ser = ser
             buffer = ""
-            print("Serial port opened.")
+
             while True:
                 line = self.ser.readline().decode(errors='ignore').strip()
                 if not line:
+                    time.sleep(0.01)  # ✅ Sleep briefly even if line is empty
                     continue
 
-                print("Raw line received:", line)
                 buffer += line + " "
 
-                # Debug print to check current buffer contents
-                print("Current buffer:", buffer)
-
-                # Try parsing once we have enough pieces
                 if "pwm_2:" in buffer:
-                    print("Trigger string 'pwm_2:' found in buffer")
                     parts = buffer.strip().split()
                     buffer = ""  # reset buffer after parsing attempt
 
-                    print("Parts received:", parts)
-
                     if len(parts) < 15:
-                        print("Not enough data parts — skipping.")
+                        time.sleep(0.01)  # ✅ Prevent CPU overuse on malformed input
                         continue
 
                     try:
-                        # Extract values
                         t1 = parts[0].split("T1:")[1]
                         t2 = parts[1].split("T2:")[1]
                         t3 = parts[2].split("T3:")[1]
@@ -157,14 +150,9 @@ class FirstWindow(QtWidgets.QMainWindow):
                         pwm_1 = parts[13].split("pwm_1:")[1]
                         pwm_2 = parts[14].split("pwm_2:")[1]
 
-                        print("Successfully parsed all values.")
-
-                        # Store for controller
                         self.t_ave_first = t_ave_first
                         self.h_ave = h_ave
 
-                        # Invoke label updates
-                        print("Updating GUI...")
                         self.second_window.update_temperature_labels(t1, t2, t3, t4, self.t_ave_first)
                         self.temp_drying_window.update_temperature_labels(t5, t6, t7, t8, t_ave_2nd)
                         self.third_window.update_humidity_labels(h1, h2, self.h_ave)
@@ -172,11 +160,12 @@ class FirstWindow(QtWidgets.QMainWindow):
                         QtCore.QMetaObject.invokeMethod(self, "update_labels", QtCore.Qt.QueuedConnection,
                                                         QtCore.Q_ARG(str, t_ave_2nd), QtCore.Q_ARG(str, h_ave),
                                                         QtCore.Q_ARG(str, pwm_2), QtCore.Q_ARG(str, pwm_1))
+                    except Exception:
+                        pass
 
-                    except Exception as e:
-                        print("Error parsing values:", e)
-        except serial.SerialException as e:
-            print("Serial connection failed:", e)
+                time.sleep(0.01)  # ✅ Main sleep after each loop iteration
+        except serial.SerialException:
+            pass  # Silently ignore serial errors
 
     @QtCore.pyqtSlot(str, str, str, str)
     def update_labels(self, t_ave_2nd, h_ave, pwm_2, pwm_1):

@@ -1,9 +1,11 @@
 import sys
 import serial
 import threading
+import pandas as pd
 import time
-from PyQt5.QtCore import QMetaObject, Qt, Q_ARG, pyqtSlot, QTimer
-from PyQt5 import QtWidgets
+from PyQt5.QtCore import QMetaObject, Qt, Q_ARG, pyqtSlot
+from datetime import datetime
+from PyQt5 import QtWidgets, QtCore
 from FLC_MaizeDry import TemperatureFuzzyController
 from lcd_display import Ui_MainWindow as Ui_FirstWindow
 from lcd_display_temperature import Ui_MainWindow as Ui_SecondWindow
@@ -17,10 +19,11 @@ class ThirdWindow(QtWidgets.QMainWindow):
         super().__init__()
         self.ui = Ui_ThirdWindow()
         self.ui.setupUi(self)
-        self.first_window = first_window
 
+        self.first_window = first_window
         self.ui.pushButton_2.setEnabled(False)
         self.ui.pushButton.setEnabled(True)
+
         self.ui.pushButton.clicked.connect(self.go_to_temp_drying)
 
     def go_to_temp_drying(self):
@@ -74,14 +77,18 @@ class FirstWindow(QtWidgets.QMainWindow):
         self.ui = Ui_FirstWindow()
         self.ui.setupUi(self)
 
-        self.fuzzy_timer = QTimer(self)
+        self.fuzzy_timer = QtCore.QTimer(self)
         self.fuzzy_timer.timeout.connect(self.run_fuzzy_controller)
         self.fuzzy_timer.start(300000)
 
         self.last_valid_drying_seconds = None
+
         self.second_window = SecondWindow(self)
         self.third_window = ThirdWindow(self)
         self.temp_drying_window = TempDryingWindow(self)
+
+        self.data_log = []
+        self.excel_file = "serial_readings.xlsx"
 
         self.ui.pushButton_2.setEnabled(True)
         self.ui.pushButton.setEnabled(False)
@@ -105,26 +112,20 @@ class FirstWindow(QtWidgets.QMainWindow):
 
     def read_serial_data(self):
         try:
-            ser = serial.Serial('COM6', 9600, timeout=1)
+            ser = serial.Serial('/dev/ttyUSB0', 9600, timeout=1)
             self.ser = ser
             buffer = ""
-            last_print_time = time.time()
-
+            print("Serial port opened.")
             while True:
                 line = self.ser.readline().decode(errors='ignore').strip()
                 if not line:
-                    time.sleep(0.01)
                     continue
-
                 buffer += line + " "
                 if "pwm_2:" in buffer:
                     parts = buffer.strip().split()
                     buffer = ""
-
                     if len(parts) < 15:
-                        time.sleep(0.01)
                         continue
-
                     try:
                         t1 = parts[0].split("T1:")[1]
                         t2 = parts[1].split("T2:")[1]
@@ -145,26 +146,24 @@ class FirstWindow(QtWidgets.QMainWindow):
                         self.t_ave_first = t_ave_first
                         self.h_ave = h_ave
 
-                        current_time = time.time()
-                        if current_time - last_print_time >= 1.0:
-                            print("Updating GUI with:")
-                            print("T1-T4:", t1, t2, t3, t4)
-                            print("T5-T8:", t5, t6, t7, t8)
-                            print("Humidity:", h1, h2, "Avg:", h_ave)
-                            print("PWM:", pwm_1, pwm_2)
-                            print("T avg 1:", t_ave_first, "T avg 2:", t_ave_2nd)
-                            last_print_time = current_time
+                        print(f"\nUpdating GUI with:\nT1-T4: {t1} {t2} {t3} {t4}\nT5-T8: {t5} {t6} {t7} {t8}\nHumidity: {h1} {h2} Avg: {h_ave}\nPWM: {pwm_1} {pwm_2}\nT avg 1: {t_ave_first} T avg 2: {t_ave_2nd}")
 
-                        self.second_window.update_temperature_labels(t1, t2, t3, t4, self.t_ave_first)
-                        self.temp_drying_window.update_temperature_labels(t5, t6, t7, t8, t_ave_2nd)
-                        self.third_window.update_humidity_labels(h1, h2, self.h_ave)
+                        QMetaObject.invokeMethod(self.second_window, "update_temperature_labels", Qt.QueuedConnection,
+                                                 Q_ARG(str, t1), Q_ARG(str, t2), Q_ARG(str, t3), Q_ARG(str, t4), Q_ARG(str, self.t_ave_first))
+
+                        QMetaObject.invokeMethod(self.temp_drying_window, "update_temperature_labels", Qt.QueuedConnection,
+                                                 Q_ARG(str, t5), Q_ARG(str, t6), Q_ARG(str, t7), Q_ARG(str, t8), Q_ARG(str, t_ave_2nd))
+
+                        QMetaObject.invokeMethod(self.third_window, "update_humidity_labels", Qt.QueuedConnection,
+                                                 Q_ARG(str, h1), Q_ARG(str, h2), Q_ARG(str, self.h_ave))
 
                         QMetaObject.invokeMethod(self, "update_labels", Qt.QueuedConnection,
-                                                Q_ARG(str, t_ave_2nd), Q_ARG(str, h_ave),
-                                                Q_ARG(str, pwm_2), Q_ARG(str, pwm_1))
+                                                 Q_ARG(str, t_ave_2nd), Q_ARG(str, h_ave), Q_ARG(str, pwm_2), Q_ARG(str, pwm_1))
+
+                        time.sleep(0.05)
+
                     except Exception as e:
-                        print("Parsing error:", e)
-                time.sleep(0.01)
+                        print("Error parsing values:", e)
         except serial.SerialException as e:
             print("Serial connection failed:", e)
 

@@ -20,13 +20,10 @@ class StartWindow(QtWidgets.QMainWindow):
         super().__init__()
         self.ui = Ui_StartWindow()
         self.ui.setupUi(self)
-
-        self.first_window = None
+        self.first_window = FirstWindow()
         self.ui.pushButton.clicked.connect(self.open_first_window)
 
     def open_first_window(self):
-        if self.first_window is None:
-            self.first_window = FirstWindow()
         self.first_window.show()
         self.close()
 
@@ -36,19 +33,12 @@ class ThirdWindow(QtWidgets.QMainWindow):
         super().__init__()
         self.ui = Ui_ThirdWindow()
         self.ui.setupUi(self)
-
         self.first_window = first_window
-        self.ui.pushButton_2.setEnabled(False)
-        self.ui.pushButton.setEnabled(True)
-
         self.ui.pushButton.clicked.connect(self.go_to_temp_drying)
 
     def go_to_temp_drying(self):
         self.close()
-        self.first_window.temp_drying_window = TempDryingWindow(self.first_window)
-        self.first_window.drying_signal.connect(self.first_window.temp_drying_window.update_temperature_labels)
         self.first_window.temp_drying_window.show()
-        self.first_window.third_window = None
 
     @QtCore.pyqtSlot(str, str, str)
     def update_humidity_labels(self, h1, h2, h_ave):
@@ -66,24 +56,16 @@ class SecondWindow(QtWidgets.QMainWindow):
         self.ui = Ui_SecondWindow()
         self.ui.setupUi(self)
         self.first_window = first_window
-
-        self.ui.pushButton_2.setEnabled(True)
-        self.ui.pushButton.setEnabled(True)
-
-        self.ui.pushButton_2.clicked.connect(self.go_to_third)
         self.ui.pushButton.clicked.connect(self.go_to_first)
+        self.ui.pushButton_2.clicked.connect(self.go_to_third)
 
     def go_to_third(self):
         self.close()
-        self.first_window.third_window = ThirdWindow(self.first_window)
-        self.first_window.humidity_signal.connect(self.first_window.third_window.update_humidity_labels)
         self.first_window.third_window.show()
-        self.first_window.second_window = None
 
     def go_to_first(self):
         self.close()
         self.first_window.show()
-        self.first_window.second_window = None
 
     @QtCore.pyqtSlot(str, str, str, str, str)
     def update_temperature_labels(self, t1, t2, t3, t4, t_ave_first):
@@ -103,26 +85,16 @@ class TempDryingWindow(QtWidgets.QMainWindow):
         self.ui = Ui_TempDryingWindow()
         self.ui.setupUi(self)
         self.first_window = first_window
-
-        self.ui.pushButton.setEnabled(True)
-        self.ui.pushButton_2.setEnabled(True)
-
         self.ui.pushButton.clicked.connect(self.go_to_second)
         self.ui.pushButton_2.clicked.connect(self.go_to_third)
 
     def go_to_second(self):
         self.close()
-        self.first_window.second_window = SecondWindow(self.first_window)
-        self.first_window.temperature_signal.connect(self.first_window.second_window.update_temperature_labels)
         self.first_window.second_window.show()
-        self.first_window.temp_drying_window = None
 
     def go_to_third(self):
         self.close()
-        self.first_window.third_window = ThirdWindow(self.first_window)
-        self.first_window.humidity_signal.connect(self.first_window.third_window.update_humidity_labels)
         self.first_window.third_window.show()
-        self.first_window.temp_drying_window = None
 
     @QtCore.pyqtSlot(str, str, str, str, str)
     def update_temperature_labels(self, t5, t6, t7, t8, t_ave_2nd):
@@ -137,31 +109,20 @@ class TempDryingWindow(QtWidgets.QMainWindow):
 
 
 class FirstWindow(QtWidgets.QMainWindow):
-    temperature_signal = QtCore.pyqtSignal(str, str, str, str, str)
-    drying_signal = QtCore.pyqtSignal(str, str, str, str, str)
-    humidity_signal = QtCore.pyqtSignal(str, str, str)
-
     def __init__(self):
         super().__init__()
         self.ui = Ui_FirstWindow()
         self.ui.setupUi(self)
-
+        self.second_window = SecondWindow(self)
+        self.third_window = ThirdWindow(self)
+        self.temp_drying_window = TempDryingWindow(self)
+        self.ui.pushButton_2.clicked.connect(self.go_to_second)
         self.fuzzy_timer = QtCore.QTimer(self)
         self.fuzzy_timer.timeout.connect(self.run_fuzzy_controller)
         self.fuzzy_timer.start(300000)
-
         self.last_valid_drying_seconds = None
-        self.second_window = None
-        self.third_window = None
-        self.temp_drying_window = None
-
         self.data_log = []
         self.excel_file = "serial_readings.xlsx"
-
-        self.ui.pushButton_2.setEnabled(True)
-        self.ui.pushButton.setEnabled(False)
-        self.ui.pushButton_2.clicked.connect(self.go_to_second)
-
         self.serial_thread = threading.Thread(target=self.read_serial_data)
         self.serial_thread.daemon = True
         self.serial_thread.start()
@@ -178,66 +139,72 @@ class FirstWindow(QtWidgets.QMainWindow):
             if hasattr(self, 'ser') and self.ser.is_open:
                 self.ser.write(f"ADJ:{adjustment}\n".encode())
         except Exception as e:
-            print("Error running TemperatureFuzzyController:", e)
+            print("Error running fuzzy controller:", e)
 
     def read_serial_data(self):
         try:
             port = 'COM3' if platform.system() == 'Windows' else '/dev/ttyUSB0'
             self.ser = serial.Serial(port, 9600, timeout=1)
             buffer = ""
-
             while True:
                 line = self.ser.readline().decode(errors='ignore').strip()
                 if not line:
                     continue
                 buffer += line + " "
-
                 if "pwm_2:" in buffer:
-                    try:
-                        parts = buffer.strip().split()
-                        buffer = ""
-                        data = {k: v for k, v in (part.split(":", 1) for part in parts if ":" in part)}
-                        required_keys = [
-                            "T0", "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8",
-                            "H1", "H2", "t_ave_first", "t_ave_2nd", "h_ave", "pwm_1", "pwm_2"
-                        ]
-                        if not all(k in data for k in required_keys):
-                            continue
+                    parts = buffer.strip().split()
+                    buffer = ""
+                    data = {k: v for k, v in (part.split(":", 1) for part in parts if ":" in part)}
+                    required = ["T0", "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8",
+                                "H1", "H2", "t_ave_first", "t_ave_2nd", "h_ave", "pwm_1", "pwm_2"]
+                    if not all(k in data for k in required):
+                        continue
+                    t0, t1, t2, t3, t4 = data["T0"], data["T1"], data["T2"], data["T3"], data["T4"]
+                    t5, t6, t7, t8 = data["T5"], data["T6"], data["T7"], data["T8"]
+                    h1, h2 = data["H1"], data["H2"]
+                    self.t_ave_first = data["t_ave_first"]
+                    t_ave_2nd = data["t_ave_2nd"]
+                    self.h_ave = data["h_ave"]
+                    pwm_1, pwm_2 = data["pwm_1"], data["pwm_2"]
 
-                        t0, t1, t2, t3 = data["T0"], data["T1"], data["T2"], data["T3"]
-                        t4, t5, t6, t7, t8 = data["T4"], data["T5"], data["T6"], data["T7"], data["T8"]
-                        h1, h2 = data["H1"], data["H2"]
-                        self.t_ave_first = data["t_ave_first"]
-                        t_ave_2nd = data["t_ave_2nd"]
-                        self.h_ave = data["h_ave"]
-                        pwm_1, pwm_2 = data["pwm_1"], data["pwm_2"]
+                    QtCore.QMetaObject.invokeMethod(self, "update_labels", QtCore.Qt.QueuedConnection,
+                        QtCore.Q_ARG(str, t_ave_2nd), QtCore.Q_ARG(str, self.h_ave),
+                        QtCore.Q_ARG(str, pwm_2), QtCore.Q_ARG(str, pwm_1))
 
-                        QtCore.QMetaObject.invokeMethod(self, "update_labels", QtCore.Qt.QueuedConnection,
-                            QtCore.Q_ARG(str, t_ave_2nd),
-                            QtCore.Q_ARG(str, self.h_ave),
-                            QtCore.Q_ARG(str, pwm_2),
-                            QtCore.Q_ARG(str, pwm_1))
+                    if self.second_window.isVisible():
+                        QtCore.QMetaObject.invokeMethod(self.second_window, "update_temperature_labels",
+                            QtCore.Qt.QueuedConnection,
+                            QtCore.Q_ARG(str, t1), QtCore.Q_ARG(str, t2),
+                            QtCore.Q_ARG(str, t3), QtCore.Q_ARG(str, t4),
+                            QtCore.Q_ARG(str, self.t_ave_first))
 
-                        self.temperature_signal.emit(t1, t2, t3, t4, self.t_ave_first)
-                        self.drying_signal.emit(t5, t6, t7, t8, t_ave_2nd)
-                        self.humidity_signal.emit(h1, h2, self.h_ave)
+                    if self.temp_drying_window.isVisible():
+                        QtCore.QMetaObject.invokeMethod(self.temp_drying_window, "update_temperature_labels",
+                            QtCore.Qt.QueuedConnection,
+                            QtCore.Q_ARG(str, t5), QtCore.Q_ARG(str, t6),
+                            QtCore.Q_ARG(str, t7), QtCore.Q_ARG(str, t8),
+                            QtCore.Q_ARG(str, t_ave_2nd))
 
-                        self.data_log.append({
-                            "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                            "T0": t0, "T1": t1, "T2": t2, "T3": t3, "T4": t4,
-                            "T5": t5, "T6": t6, "T7": t7, "T8": t8,
-                            "H1": h1, "H2": h2, "T_Ave_First": self.t_ave_first,
-                            "T_Ave_Second": t_ave_2nd, "H_Ave": self.h_ave,
-                            "PWM_1": pwm_1, "PWM_2": pwm_2
-                        })
+                    if self.third_window.isVisible():
+                        QtCore.QMetaObject.invokeMethod(self.third_window, "update_humidity_labels",
+                            QtCore.Qt.QueuedConnection,
+                            QtCore.Q_ARG(str, h1), QtCore.Q_ARG(str, h2),
+                            QtCore.Q_ARG(str, self.h_ave))
 
-                        if len(self.data_log) % 10 == 0:
-                            pd.DataFrame(self.data_log).to_excel(self.excel_file, index=False, engine='openpyxl')
-                            self.data_log.clear()
+                    self.data_log.append({
+                        "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "T0": t0, "T1": t1, "T2": t2, "T3": t3, "T4": t4,
+                        "T5": t5, "T6": t6, "T7": t7, "T8": t8,
+                        "H1": h1, "H2": h2, "T_Ave_First": self.t_ave_first,
+                        "T_Ave_Second": t_ave_2nd, "H_Ave": self.h_ave,
+                        "PWM_1": pwm_1, "PWM_2": pwm_2
+                    })
 
-                        time.sleep(1)
-                    except Exception as e:
-                        print("Error parsing serial data:", e)
+                    if len(self.data_log) % 10 == 0:
+                        pd.DataFrame(self.data_log).to_excel(self.excel_file, index=False, engine='openpyxl')
+                        self.data_log.clear()
+
+                    time.sleep(1)
         except serial.SerialException as e:
             print("Serial error:", e)
 
@@ -261,8 +228,6 @@ class FirstWindow(QtWidgets.QMainWindow):
 
     def go_to_second(self):
         self.hide()
-        self.second_window = SecondWindow(self)
-        self.temperature_signal.connect(self.second_window.update_temperature_labels)
         self.second_window.show()
 
 

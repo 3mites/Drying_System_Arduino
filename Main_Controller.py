@@ -18,7 +18,6 @@ class StartWindow(QtWidgets.QMainWindow):
         super().__init__()
         self.ui = Ui_StartWindow()
         self.ui.setupUi(self)
-
         self.first_window = None
         self.ui.pushButton.clicked.connect(self.open_first_window)
 
@@ -34,11 +33,9 @@ class ThirdWindow(QtWidgets.QMainWindow):
         super().__init__()
         self.ui = Ui_ThirdWindow()
         self.ui.setupUi(self)
-
         self.first_window = first_window
         self.ui.pushButton_2.setEnabled(False)
         self.ui.pushButton.setEnabled(True)
-
         self.ui.pushButton.clicked.connect(self.go_to_temp_drying)
 
     def go_to_temp_drying(self):
@@ -60,10 +57,8 @@ class SecondWindow(QtWidgets.QMainWindow):
         self.ui = Ui_SecondWindow()
         self.ui.setupUi(self)
         self.first_window = first_window
-
         self.ui.pushButton_2.setEnabled(True)
         self.ui.pushButton.setEnabled(True)
-
         self.ui.pushButton_2.clicked.connect(self.go_to_third)
         self.ui.pushButton.clicked.connect(self.go_to_first)
 
@@ -91,17 +86,14 @@ class FirstWindow(QtWidgets.QMainWindow):
         super().__init__()
         self.ui = Ui_FirstWindow()
         self.ui.setupUi(self)
-
         self.fuzzy_timer = QtCore.QTimer(self)
         self.fuzzy_timer.timeout.connect(self.run_fuzzy_controller)
         self.fuzzy_timer.start(300000)
 
         self.last_valid_drying_seconds = None
-
         self.second_window = None
         self.third_window = None
         self.temp_drying_window = None
-
         self.data_log = []
         self.excel_file = "serial_readings.xlsx"
 
@@ -143,7 +135,6 @@ class FirstWindow(QtWidgets.QMainWindow):
                         continue
 
                     try:
-                        t0 = parts[0].split("T0:")[1]
                         t1 = parts[1].split("T1:")[1]
                         t2 = parts[2].split("T2:")[1]
                         t3 = parts[3].split("T3:")[1]
@@ -181,7 +172,7 @@ class FirstWindow(QtWidgets.QMainWindow):
 
                         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         self.data_log.append({
-                            "Timestamp": timestamp, "T0": t0, "T1": t1, "T2": t2, "T3": t3,
+                            "Timestamp": timestamp, "T1": t1, "T2": t2, "T3": t3,
                             "T4": t4, "T5": t5, "T6": t6, "T7": t7, "T8": t8,
                             "H1": h1, "H2": h2, "T_Ave_First": self.t_ave_first,
                             "T_Ave_Second": t_ave_2nd, "H_Ave": self.h_ave,
@@ -231,10 +222,8 @@ class TempDryingWindow(QtWidgets.QMainWindow):
         self.ui = Ui_TempDryingWindow()
         self.ui.setupUi(self)
         self.first_window = first_window
-
         self.ui.pushButton.setEnabled(True)
         self.ui.pushButton_2.setEnabled(True)
-
         self.ui.pushButton.clicked.connect(self.go_to_second)
         self.ui.pushButton_2.clicked.connect(self.go_to_third)
 

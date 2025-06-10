@@ -269,6 +269,7 @@ void loop() {
     Serial.print("Fan1 Speed Label: ");
     Serial.println(fanSpeedLabel);
 
+    Serial.print("T0:"); Serial.print(temperature, 2); Serial.print(" ");
     for (int i = 0; i < 8; i++) {
       Serial.print("T"); Serial.print(i + 1); Serial.print(":");
       Serial.print(Temperatures[i], 2); Serial.print(" ");

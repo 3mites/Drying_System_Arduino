@@ -4,8 +4,8 @@
 #include <DHT.h>
 
 // ----- Sensor Pins -----
-#define DHTPIN1 2
-#define DHTPIN2 3
+#define DHTPIN1 30
+#define DHTPIN2 31
 #define DHTTYPE DHT22
 DHT dht1(DHTPIN1, DHTTYPE);
 DHT dht2(DHTPIN2, DHTTYPE);
@@ -33,14 +33,16 @@ unsigned long lastPrintTime = 0;
 unsigned long lastPhasePrintTime = 0;
 
 // ----- MAX31855 -----
-const int thermoCLK = 52;
-const int thermoCS = 53;
-const int thermoDO = 50;
-Adafruit_MAX31855 thermocouple(thermoCLK, thermoCS, thermoDO);
+const int thermo31855CLK = 11;
+const int thermo31855DO = 12;
+const int thermo31855CS = 53;
+Adafruit_MAX31855 thermocouple(thermo31855CLK, thermo31855CS, thermo31855DO);
 double temperature = 0;
 double lastValidTemp = 0;
 
 // ----- MAX6675 -----
+const int thermoCLK = 52;
+const int thermoDO = 50;
 const int numSensors = 4;
 const int csPins_Drying[] = {22, 23, 24, 25};
 const int csPins_Plenum[] = {26, 27, 28, 29};
@@ -71,10 +73,37 @@ String speedLabel;
 String fanSpeedLabel;
 
 // ----- Control -----
-double adjustTemperature = 80.0;
+double adjustTemperature = 0.0;
 
 String serialInput = "";
 bool newCommand = false;
+
+const float MAX_DIFF = 5.0;  // Max allowed deviation for harmonizing
+
+void harmonizeTemperatures(float* temps, int count) {
+  float sum = 0;
+  int validCount = 0;
+
+  for (int i = 0; i < count; i++) {
+    if (!isnan(temps[i])) {
+      sum += temps[i];
+      validCount++;
+    }
+  }
+
+  if (validCount == 0) return;
+
+  float avg = sum / validCount;
+
+  for (int i = 0; i < count; i++) {
+    if (!isnan(temps[i])) {
+      float diff = temps[i] - avg;
+      if (abs(diff) > MAX_DIFF) {
+        temps[i] = avg;
+      }
+    }
+  }
+}
 
 void setup() {
   pinMode(Gate1, OUTPUT);
@@ -100,7 +129,7 @@ void setup() {
 
 void loop() {
   unsigned long currentMillis = millis();
-  
+
   while (Serial.available()) {
     char inChar = (char)Serial.read();
 
@@ -177,6 +206,9 @@ void loop() {
       }
     }
 
+    // Harmonize all readings (Plenum + Drying)
+    harmonizeTemperatures(Temperatures, 8);
+
     averageTemp = validCount_Drying > 0 ? totalTemp_Drying / validCount_Drying : lastValidAverage;
     lastValidAverage = averageTemp;
 
@@ -213,17 +245,17 @@ void loop() {
   }
 
   // --- Fan control ---
-  analogWrite(Gate1, lowPWM);
+  analogWrite(Gate1, mediumPWM);
 
   if (h_ave >= 50.0 && h_ave <= 60.0) {
     gate2_pwm = highPWM;
-    gate3_pwm = mediumPWM;
+    gate3_pwm = highPWM;
   } else if (h_ave >= 30.0 && h_ave <= 40.0) {
     gate2_pwm = 0;
     gate3_pwm = lowPWM;
   } else {
     gate2_pwm = 0;
-    gate3_pwm = 0;
+    gate3_pwm = lowPWM;
   }
 
   analogWrite(Gate2, gate2_pwm);

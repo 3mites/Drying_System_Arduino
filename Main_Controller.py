@@ -1,10 +1,8 @@
 import sys
 import serial
 import threading
-import pandas as pd
 import time
-from PyQt5.QtCore import QMetaObject, Qt, Q_ARG, pyqtSlot
-from datetime import datetime
+from PyQt5.QtCore import QMetaObject, Qt, Q_ARG
 from PyQt5 import QtWidgets, QtCore
 from FLC_MaizeDry import TemperatureFuzzyController
 from lcd_display import Ui_MainWindow as Ui_FirstWindow
@@ -19,11 +17,9 @@ class ThirdWindow(QtWidgets.QMainWindow):
         super().__init__()
         self.ui = Ui_ThirdWindow()
         self.ui.setupUi(self)
-
         self.first_window = first_window
         self.ui.pushButton_2.setEnabled(False)
         self.ui.pushButton.setEnabled(True)
-
         self.ui.pushButton.clicked.connect(self.go_to_temp_drying)
 
     def go_to_temp_drying(self):
@@ -32,7 +28,7 @@ class ThirdWindow(QtWidgets.QMainWindow):
         self.first_window.temp_drying_window.show()
         self.close()
 
-    @pyqtSlot(str, str, str)
+    @QtCore.pyqtSlot(str, str, str)
     def update_humidity_labels(self, h1, h2, h_ave):
         self.ui.label_6.setText(f"{h1} %")
         self.ui.label_12.setText(f"{h2} %")
@@ -45,10 +41,8 @@ class SecondWindow(QtWidgets.QMainWindow):
         self.ui = Ui_SecondWindow()
         self.ui.setupUi(self)
         self.first_window = first_window
-
         self.ui.pushButton_2.setEnabled(True)
         self.ui.pushButton.setEnabled(True)
-
         self.ui.pushButton_2.clicked.connect(self.go_to_third)
         self.ui.pushButton.clicked.connect(self.go_to_first)
 
@@ -62,13 +56,45 @@ class SecondWindow(QtWidgets.QMainWindow):
         self.first_window.show()
         self.close()
 
-    @pyqtSlot(str, str, str, str, str)
+    @QtCore.pyqtSlot(str, str, str, str, str)
     def update_temperature_labels(self, t1, t2, t3, t4, t_ave_first):
         self.ui.label.setText(f"{t1} °C")
         self.ui.label_6.setText(f"{t2} °C")
         self.ui.label_12.setText(f"{t3} °C")
         self.ui.label_11.setText(f"{t4} °C")
         self.ui.label_8.setText(f"Average: {t_ave_first} °C")
+
+
+class TempDryingWindow(QtWidgets.QMainWindow):
+    def __init__(self, first_window):
+        super().__init__()
+        self.ui = Ui_TempDryingWindow()
+        self.ui.setupUi(self)
+        self.first_window = first_window
+        self.ui.pushButton.setEnabled(True)
+        self.ui.pushButton_2.setEnabled(True)
+        self.ui.pushButton.clicked.connect(self.go_to_second)
+        self.ui.pushButton_2.clicked.connect(self.go_to_third)
+
+    def go_to_second(self):
+        if self.first_window.second_window is None:
+            self.first_window.second_window = SecondWindow(self.first_window)
+        self.first_window.second_window.show()
+        self.close()
+
+    def go_to_third(self):
+        if self.first_window.third_window is None:
+            self.first_window.third_window = ThirdWindow(self.first_window)
+        self.first_window.third_window.show()
+        self.close()
+
+    @QtCore.pyqtSlot(str, str, str, str, str)
+    def update_temperature_labels(self, t5, t6, t7, t8, t_ave_2nd):
+        self.ui.label.setText(f"{t5} °C")
+        self.ui.label_6.setText(f"{t6} °C")
+        self.ui.label_12.setText(f"{t7} °C")
+        self.ui.label_11.setText(f"{t8} °C")
+        self.ui.label_8.setText(f"Average: {t_ave_2nd} °C")
 
 
 class FirstWindow(QtWidgets.QMainWindow):
@@ -87,9 +113,6 @@ class FirstWindow(QtWidgets.QMainWindow):
         self.third_window = ThirdWindow(self)
         self.temp_drying_window = TempDryingWindow(self)
 
-        self.data_log = []
-        self.excel_file = "serial_readings.xlsx"
-
         self.ui.pushButton_2.setEnabled(True)
         self.ui.pushButton.setEnabled(False)
         self.ui.pushButton_2.clicked.connect(self.go_to_second)
@@ -100,32 +123,34 @@ class FirstWindow(QtWidgets.QMainWindow):
 
     def run_fuzzy_controller(self):
         try:
-            print("Running TemperatureFuzzyController...")
             fuzzy_control = TemperatureFuzzyController()
             adjustment = fuzzy_control.temperature_adjustment(self.t_ave_first, self.h_ave)
             if hasattr(self, 'ser') and self.ser.is_open:
                 message = f"ADJ:{adjustment}\n"
                 self.ser.write(message.encode())
-                print("Sent to Arduino:", message)
         except Exception as e:
-            print("Error running TemperatureFuzzyController:", e)
+            print("Error running fuzzy logic:", e)
 
     def read_serial_data(self):
         try:
-            ser = serial.Serial('/dev/ttyUSB0', 9600, timeout=1)
+            ser = serial.Serial('COM6', 9600, timeout=1)
             self.ser = ser
             buffer = ""
-            print("Serial port opened.")
+
             while True:
                 line = self.ser.readline().decode(errors='ignore').strip()
                 if not line:
                     continue
+
                 buffer += line + " "
+
                 if "pwm_2:" in buffer:
                     parts = buffer.strip().split()
                     buffer = ""
+
                     if len(parts) < 15:
                         continue
+
                     try:
                         t1 = parts[0].split("T1:")[1]
                         t2 = parts[1].split("T2:")[1]
@@ -146,28 +171,25 @@ class FirstWindow(QtWidgets.QMainWindow):
                         self.t_ave_first = t_ave_first
                         self.h_ave = h_ave
 
-                        print(f"\nUpdating GUI with:\nT1-T4: {t1} {t2} {t3} {t4}\nT5-T8: {t5} {t6} {t7} {t8}\nHumidity: {h1} {h2} Avg: {h_ave}\nPWM: {pwm_1} {pwm_2}\nT avg 1: {t_ave_first} T avg 2: {t_ave_2nd}")
+                        self.second_window.update_temperature_labels(t1, t2, t3, t4, self.t_ave_first)
+                        self.temp_drying_window.update_temperature_labels(t5, t6, t7, t8, t_ave_2nd)
+                        self.third_window.update_humidity_labels(h1, h2, self.h_ave)
 
-                        QMetaObject.invokeMethod(self.second_window, "update_temperature_labels", Qt.QueuedConnection,
-                                                 Q_ARG(str, t1), Q_ARG(str, t2), Q_ARG(str, t3), Q_ARG(str, t4), Q_ARG(str, self.t_ave_first))
-
-                        QMetaObject.invokeMethod(self.temp_drying_window, "update_temperature_labels", Qt.QueuedConnection,
-                                                 Q_ARG(str, t5), Q_ARG(str, t6), Q_ARG(str, t7), Q_ARG(str, t8), Q_ARG(str, t_ave_2nd))
-
-                        QMetaObject.invokeMethod(self.third_window, "update_humidity_labels", Qt.QueuedConnection,
-                                                 Q_ARG(str, h1), Q_ARG(str, h2), Q_ARG(str, self.h_ave))
-
-                        QMetaObject.invokeMethod(self, "update_labels", Qt.QueuedConnection,
-                                                 Q_ARG(str, t_ave_2nd), Q_ARG(str, h_ave), Q_ARG(str, pwm_2), Q_ARG(str, pwm_1))
-
-                        time.sleep(0.05)
+                        QMetaObject.invokeMethod(
+                            self, "update_labels", Qt.QueuedConnection,
+                            Q_ARG(str, t_ave_2nd), Q_ARG(str, h_ave),
+                            Q_ARG(str, pwm_2), Q_ARG(str, pwm_1)
+                        )
 
                     except Exception as e:
-                        print("Error parsing values:", e)
+                        print("Error parsing serial data:", e)
+
+                time.sleep(0.05)  # helps prevent overload on Pi
+
         except serial.SerialException as e:
             print("Serial connection failed:", e)
 
-    @pyqtSlot(str, str, str, str)
+    @QtCore.pyqtSlot(str, str, str, str)
     def update_labels(self, t_ave_2nd, h_ave, pwm_2, pwm_1):
         self.ui.label.setText(f"{t_ave_2nd} °C")
         self.ui.label_6.setText(f"{h_ave} %")
@@ -181,7 +203,6 @@ class FirstWindow(QtWidgets.QMainWindow):
             self.last_valid_drying_seconds = drying_seconds
             self.ui.label_8.setText(f"Dry Time: {drying_seconds} s")
         except Exception as e:
-            print("Error estimating drying time:", e)
             if self.last_valid_drying_seconds is not None:
                 self.ui.label_8.setText(f"Dry Time: {self.last_valid_drying_seconds} s")
             else:
@@ -190,40 +211,6 @@ class FirstWindow(QtWidgets.QMainWindow):
     def go_to_second(self):
         self.second_window.show()
         self.hide()
-
-
-class TempDryingWindow(QtWidgets.QMainWindow):
-    def __init__(self, first_window):
-        super().__init__()
-        self.ui = Ui_TempDryingWindow()
-        self.ui.setupUi(self)
-        self.first_window = first_window
-
-        self.ui.pushButton.setEnabled(True)
-        self.ui.pushButton_2.setEnabled(True)
-
-        self.ui.pushButton.clicked.connect(self.go_to_second)
-        self.ui.pushButton_2.clicked.connect(self.go_to_third)
-
-    def go_to_second(self):
-        if self.first_window.second_window is None:
-            self.first_window.second_window = SecondWindow(self.first_window)
-        self.first_window.second_window.show()
-        self.close()
-
-    def go_to_third(self):
-        if self.first_window.third_window is None:
-            self.first_window.third_window = ThirdWindow(self.first_window)
-        self.first_window.third_window.show()
-        self.close()
-
-    @pyqtSlot(str, str, str, str, str)
-    def update_temperature_labels(self, t5, t6, t7, t8, t_ave_2nd):
-        self.ui.label.setText(f"{t5} °C")
-        self.ui.label_6.setText(f"{t6} °C")
-        self.ui.label_12.setText(f"{t7} °C")
-        self.ui.label_11.setText(f"{t8} °C")
-        self.ui.label_8.setText(f"Average: {t_ave_2nd} °C")
 
 
 if __name__ == "__main__":

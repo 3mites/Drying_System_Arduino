@@ -44,10 +44,11 @@ class ThirdWindow(QtWidgets.QMainWindow):
         self.ui.pushButton.clicked.connect(self.go_to_temp_drying)
 
     def go_to_temp_drying(self):
-        if self.first_window.temp_drying_window is None:
-            self.first_window.temp_drying_window = TempDryingWindow(self.first_window)
-        self.first_window.temp_drying_window.show()
         self.close()
+        self.first_window.temp_drying_window = TempDryingWindow(self.first_window)
+        self.first_window.drying_signal.connect(self.first_window.temp_drying_window.update_temperature_labels)
+        self.first_window.temp_drying_window.show()
+        self.first_window.third_window = None
 
     @QtCore.pyqtSlot(str, str, str)
     def update_humidity_labels(self, h1, h2, h_ave):
@@ -73,14 +74,16 @@ class SecondWindow(QtWidgets.QMainWindow):
         self.ui.pushButton.clicked.connect(self.go_to_first)
 
     def go_to_third(self):
-        if self.first_window.temp_drying_window is None:
-            self.first_window.temp_drying_window = TempDryingWindow(self.first_window)
-        self.first_window.temp_drying_window.show()
         self.close()
+        self.first_window.third_window = ThirdWindow(self.first_window)
+        self.first_window.humidity_signal.connect(self.first_window.third_window.update_humidity_labels)
+        self.first_window.third_window.show()
+        self.first_window.second_window = None
 
     def go_to_first(self):
-        self.first_window.show()
         self.close()
+        self.first_window.show()
+        self.first_window.second_window = None
 
     @QtCore.pyqtSlot(str, str, str, str, str)
     def update_temperature_labels(self, t1, t2, t3, t4, t_ave_first):
@@ -94,7 +97,50 @@ class SecondWindow(QtWidgets.QMainWindow):
             print("Second window temperature update error:", e)
 
 
+class TempDryingWindow(QtWidgets.QMainWindow):
+    def __init__(self, first_window):
+        super().__init__()
+        self.ui = Ui_TempDryingWindow()
+        self.ui.setupUi(self)
+        self.first_window = first_window
+
+        self.ui.pushButton.setEnabled(True)
+        self.ui.pushButton_2.setEnabled(True)
+
+        self.ui.pushButton.clicked.connect(self.go_to_second)
+        self.ui.pushButton_2.clicked.connect(self.go_to_third)
+
+    def go_to_second(self):
+        self.close()
+        self.first_window.second_window = SecondWindow(self.first_window)
+        self.first_window.temperature_signal.connect(self.first_window.second_window.update_temperature_labels)
+        self.first_window.second_window.show()
+        self.first_window.temp_drying_window = None
+
+    def go_to_third(self):
+        self.close()
+        self.first_window.third_window = ThirdWindow(self.first_window)
+        self.first_window.humidity_signal.connect(self.first_window.third_window.update_humidity_labels)
+        self.first_window.third_window.show()
+        self.first_window.temp_drying_window = None
+
+    @QtCore.pyqtSlot(str, str, str, str, str)
+    def update_temperature_labels(self, t5, t6, t7, t8, t_ave_2nd):
+        try:
+            self.ui.label.setText(f"{t5} °C")
+            self.ui.label_6.setText(f"{t6} °C")
+            self.ui.label_12.setText(f"{t7} °C")
+            self.ui.label_11.setText(f"{t8} °C")
+            self.ui.label_8.setText(f"Average: {t_ave_2nd} °C")
+        except Exception as e:
+            print("Drying window temperature update error:", e)
+
+
 class FirstWindow(QtWidgets.QMainWindow):
+    temperature_signal = QtCore.pyqtSignal(str, str, str, str, str)
+    drying_signal = QtCore.pyqtSignal(str, str, str, str, str)
+    humidity_signal = QtCore.pyqtSignal(str, str, str)
+
     def __init__(self):
         super().__init__()
         self.ui = Ui_FirstWindow()
@@ -105,7 +151,6 @@ class FirstWindow(QtWidgets.QMainWindow):
         self.fuzzy_timer.start(300000)
 
         self.last_valid_drying_seconds = None
-
         self.second_window = None
         self.third_window = None
         self.temp_drying_window = None
@@ -173,25 +218,9 @@ class FirstWindow(QtWidgets.QMainWindow):
                             QtCore.Q_ARG(str, pwm_2),
                             QtCore.Q_ARG(str, pwm_1))
 
-                        if self.second_window and self.second_window.isVisible():
-                            QtCore.QMetaObject.invokeMethod(self.second_window, "update_temperature_labels",
-                                QtCore.Qt.QueuedConnection,
-                                QtCore.Q_ARG(str, t1), QtCore.Q_ARG(str, t2),
-                                QtCore.Q_ARG(str, t3), QtCore.Q_ARG(str, t4),
-                                QtCore.Q_ARG(str, self.t_ave_first))
-
-                        if self.temp_drying_window and self.temp_drying_window.isVisible():
-                            QtCore.QMetaObject.invokeMethod(self.temp_drying_window, "update_temperature_labels",
-                                QtCore.Qt.QueuedConnection,
-                                QtCore.Q_ARG(str, t5), QtCore.Q_ARG(str, t6),
-                                QtCore.Q_ARG(str, t7), QtCore.Q_ARG(str, t8),
-                                QtCore.Q_ARG(str, t_ave_2nd))
-
-                        if self.third_window and self.third_window.isVisible():
-                            QtCore.QMetaObject.invokeMethod(self.third_window, "update_humidity_labels",
-                                QtCore.Qt.QueuedConnection,
-                                QtCore.Q_ARG(str, h1), QtCore.Q_ARG(str, h2),
-                                QtCore.Q_ARG(str, self.h_ave))
+                        self.temperature_signal.emit(t1, t2, t3, t4, self.t_ave_first)
+                        self.drying_signal.emit(t5, t6, t7, t8, t_ave_2nd)
+                        self.humidity_signal.emit(h1, h2, self.h_ave)
 
                         self.data_log.append({
                             "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -231,47 +260,10 @@ class FirstWindow(QtWidgets.QMainWindow):
                 self.ui.label_8.setText("Dry Time: Error")
 
     def go_to_second(self):
-        if self.second_window is None:
-            self.second_window = SecondWindow(self)
-        self.second_window.show()
         self.hide()
-
-
-class TempDryingWindow(QtWidgets.QMainWindow):
-    def __init__(self, first_window):
-        super().__init__()
-        self.ui = Ui_TempDryingWindow()
-        self.ui.setupUi(self)
-        self.first_window = first_window
-
-        self.ui.pushButton.setEnabled(True)
-        self.ui.pushButton_2.setEnabled(True)
-
-        self.ui.pushButton.clicked.connect(self.go_to_second)
-        self.ui.pushButton_2.clicked.connect(self.go_to_third)
-
-    def go_to_second(self):
-        if self.first_window.second_window is None:
-            self.first_window.second_window = SecondWindow(self.first_window)
-        self.first_window.second_window.show()
-        self.close()
-
-    def go_to_third(self):
-        if self.first_window.third_window is None:
-            self.first_window.third_window = ThirdWindow(self.first_window)
-        self.first_window.third_window.show()
-        self.close()
-
-    @QtCore.pyqtSlot(str, str, str, str, str)
-    def update_temperature_labels(self, t5, t6, t7, t8, t_ave_2nd):
-        try:
-            self.ui.label.setText(f"{t5} °C")
-            self.ui.label_6.setText(f"{t6} °C")
-            self.ui.label_12.setText(f"{t7} °C")
-            self.ui.label_11.setText(f"{t8} °C")
-            self.ui.label_8.setText(f"Average: {t_ave_2nd} °C")
-        except Exception as e:
-            print("Drying window temperature update error:", e)
+        self.second_window = SecondWindow(self)
+        self.temperature_signal.connect(self.second_window.update_temperature_labels)
+        self.second_window.show()
 
 
 if __name__ == "__main__":

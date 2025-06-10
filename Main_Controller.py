@@ -4,6 +4,7 @@ import threading
 import pandas as pd
 from datetime import datetime
 from PyQt5 import QtWidgets, QtCore
+from PyQt5.QtCore import pyqtSignal
 from FLC_MaizeDry import TemperatureFuzzyController
 from lcd_display_button import Ui_MainWindow as Ui_StartWindow
 from lcd_display import Ui_MainWindow as Ui_FirstWindow
@@ -82,6 +83,10 @@ class SecondWindow(QtWidgets.QMainWindow):
 
 
 class FirstWindow(QtWidgets.QMainWindow):
+    temperature_updated = pyqtSignal(str, str, str, str, str)
+    humidity_updated = pyqtSignal(str, str, str)
+    pwm_updated = pyqtSignal(str, str, str, str)
+
     def __init__(self):
         super().__init__()
         self.ui = Ui_FirstWindow()
@@ -100,6 +105,10 @@ class FirstWindow(QtWidgets.QMainWindow):
         self.ui.pushButton_2.setEnabled(True)
         self.ui.pushButton.setEnabled(False)
         self.ui.pushButton_2.clicked.connect(self.go_to_second)
+
+        self.temperature_updated.connect(self.update_temp_drying_labels)
+        self.humidity_updated.connect(self.update_humidity_labels)
+        self.pwm_updated.connect(self.update_labels)
 
         self.serial_thread = threading.Thread(target=self.read_serial_data)
         self.serial_thread.daemon = True
@@ -151,24 +160,16 @@ class FirstWindow(QtWidgets.QMainWindow):
                         pwm_1 = parts[14].split("pwm_1:")[1]
                         pwm_2 = parts[15].split("pwm_2:")[1]
 
-                        QtCore.QMetaObject.invokeMethod(self, "update_labels", QtCore.Qt.QueuedConnection,
-                            QtCore.Q_ARG(str, t_ave_2nd), QtCore.Q_ARG(str, self.h_ave),
-                            QtCore.Q_ARG(str, pwm_2), QtCore.Q_ARG(str, pwm_1))
+                        self.pwm_updated.emit(t_ave_2nd, self.h_ave, pwm_2, pwm_1)
 
                         if self.second_window and self.second_window.isVisible():
-                            QtCore.QMetaObject.invokeMethod(self.second_window, "update_temperature_labels",
-                                QtCore.Qt.QueuedConnection, QtCore.Q_ARG(str, t1), QtCore.Q_ARG(str, t2),
-                                QtCore.Q_ARG(str, t3), QtCore.Q_ARG(str, t4), QtCore.Q_ARG(str, self.t_ave_first))
+                            self.temperature_updated.emit(t1, t2, t3, t4, self.t_ave_first)
 
                         if self.temp_drying_window and self.temp_drying_window.isVisible():
-                            QtCore.QMetaObject.invokeMethod(self.temp_drying_window, "update_temperature_labels",
-                                QtCore.Qt.QueuedConnection, QtCore.Q_ARG(str, t5), QtCore.Q_ARG(str, t6),
-                                QtCore.Q_ARG(str, t7), QtCore.Q_ARG(str, t8), QtCore.Q_ARG(str, t_ave_2nd))
+                            self.temperature_updated.emit(t5, t6, t7, t8, t_ave_2nd)
 
                         if self.third_window and self.third_window.isVisible():
-                            QtCore.QMetaObject.invokeMethod(self.third_window, "update_humidity_labels",
-                                QtCore.Qt.QueuedConnection, QtCore.Q_ARG(str, h1),
-                                QtCore.Q_ARG(str, h2), QtCore.Q_ARG(str, self.h_ave))
+                            self.humidity_updated.emit(h1, h2, self.h_ave)
 
                         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         self.data_log.append({
@@ -208,6 +209,18 @@ class FirstWindow(QtWidgets.QMainWindow):
                 self.ui.label_8.setText(f"Dry Time: {self.last_valid_drying_seconds} s")
             else:
                 self.ui.label_8.setText("Dry Time: Error")
+
+    @QtCore.pyqtSlot(str, str, str, str, str)
+    def update_temp_drying_labels(self, t1, t2, t3, t4, t_ave):
+        if self.second_window and self.second_window.isVisible():
+            self.second_window.update_temperature_labels(t1, t2, t3, t4, t_ave)
+        if self.temp_drying_window and self.temp_drying_window.isVisible():
+            self.temp_drying_window.update_temperature_labels(t1, t2, t3, t4, t_ave)
+
+    @QtCore.pyqtSlot(str, str, str)
+    def update_humidity_labels(self, h1, h2, h_ave):
+        if self.third_window and self.third_window.isVisible():
+            self.third_window.update_humidity_labels(h1, h2, h_ave)
 
     def go_to_second(self):
         if self.second_window is None:

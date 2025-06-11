@@ -1,7 +1,7 @@
 import sys
 import serial
 import time
-from PyQt5.QtCore import QMetaObject, Qt, Q_ARG, pyqtSlot, QTimer
+from PyQt5.QtCore import QMetaObject, Qt, Q_ARG, pyqtSlot, QTimer, QThread, pyqtSignal
 from PyQt5 import QtWidgets
 from FLC_MaizeDry import TemperatureFuzzyController
 from lcd_display import Ui_MainWindow as Ui_FirstWindow
@@ -9,6 +9,58 @@ from lcd_display_temperature import Ui_MainWindow as Ui_SecondWindow
 from lcd_display_temperature_drying import Ui_MainWindow as Ui_TempDryingWindow
 from lcd_display_humidity import Ui_MainWindow as Ui_ThirdWindow
 from calculate_emc import MoistureEstimator
+
+
+class SerialWorker(QThread):
+    packet_ready = pyqtSignal(dict)
+
+    def __init__(self, port, baud, parent=None):
+        super().__init__(parent)
+        self.port, self.baud = port, baud
+        self.running = True
+
+    def run(self):
+        try:
+            ser = serial.Serial(self.port, self.baud, timeout=1)
+        except Exception as e:
+            print("Serial init failed:", e)
+            return
+
+        buffer = ""
+        last_emit = time.time()
+
+        while self.running:
+            line = ser.readline().decode(errors='ignore').strip()
+            if not line:
+                continue
+            buffer += line + " "
+            if "pwm_2:" in buffer:
+                parts = buffer.strip().split()
+                buffer = ""
+                if len(parts) < 15:
+                    continue
+                try:
+                    data = {
+                        'T': parts[11].split("t_ave_2nd:")[1],
+                        'H': parts[12].split("h_ave:")[1],
+                        'pwm2': parts[14].split("pwm_2:")[1],
+                        'pwm1': parts[13].split("pwm_1:")[1],
+                        'temps': [parts[i].split(f"T{i+1}:")[1] for i in range(4)],
+                        'dry_temps': [parts[i].split(f"T{i+5}:")[1] for i in range(4)],
+                        'hum': [parts[8].split("H1:")[1], parts[9].split("H2:")[1]],
+                        't_ave_first': parts[10].split("t_ave_first:")[1],
+                    }
+                except Exception as e:
+                    continue
+
+                now = time.time()
+                if now - last_emit >= 1.0:
+                    self.packet_ready.emit(data)
+                    last_emit = now
+
+    def stop(self):
+        self.running = False
+        self.wait()
 
 
 class ThirdWindow(QtWidgets.QMainWindow):
@@ -106,64 +158,9 @@ class FirstWindow(QtWidgets.QMainWindow):
         self.ui.pushButton.setEnabled(False)
         self.ui.pushButton_2.clicked.connect(self.go_to_second)
 
-        self.serial_buffer = ""
-        self.init_serial()
-
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.poll_serial_port)
-        self.timer.start(1000)  # Poll every 1 second
-
-    def init_serial(self):
-        try:
-            self.ser = serial.Serial('COM6', 9600, timeout=1)
-        except Exception as e:
-            print("Serial init failed:", e)
-            self.ser = None
-
-    def poll_serial_port(self):
-        if not self.ser or not self.ser.is_open:
-            return
-
-        try:
-            line = self.ser.readline().decode(errors='ignore').strip()
-            if line:
-                self.serial_buffer += line + " "
-                if "pwm_2:" in self.serial_buffer:
-                    self.handle_serial_packet(self.serial_buffer.strip())
-                    self.serial_buffer = ""
-        except Exception as e:
-            print("Polling error:", e)
-
-    def handle_serial_packet(self, buffer):
-        parts = buffer.split()
-        if len(parts) < 15:
-            print("Incomplete packet:", buffer)
-            return
-
-        try:
-            t1 = parts[0].split("T1:")[1]
-            t2 = parts[1].split("T2:")[1]
-            t3 = parts[2].split("T3:")[1]
-            t4 = parts[3].split("T4:")[1]
-            t5 = parts[4].split("T5:")[1]
-            t6 = parts[5].split("T6:")[1]
-            t7 = parts[6].split("T7:")[1]
-            t8 = parts[7].split("T8:")[1]
-            h1 = parts[8].split("H1:")[1]
-            h2 = parts[9].split("H2:")[1]
-            self.t_ave_first = parts[10].split("t_ave_first:")[1]
-            t_ave_2nd = parts[11].split("t_ave_2nd:")[1]
-            self.h_ave = parts[12].split("h_ave:")[1]
-            pwm_1 = parts[13].split("pwm_1:")[1]
-            pwm_2 = parts[14].split("pwm_2:")[1]
-
-            self.second_window.update_temperature_labels(t1, t2, t3, t4, self.t_ave_first)
-            self.temp_drying_window.update_temperature_labels(t5, t6, t7, t8, t_ave_2nd)
-            self.third_window.update_humidity_labels(h1, h2, self.h_ave)
-            self.update_labels(t_ave_2nd, self.h_ave, pwm_2, pwm_1)
-
-        except Exception as e:
-            print("Packet parse error:", e)
+        self.serial_worker = SerialWorker('COM6', 9600)
+        self.serial_worker.packet_ready.connect(self.on_packet)
+        self.serial_worker.start()
 
     def run_fuzzy_controller(self):
         try:
@@ -174,7 +171,16 @@ class FirstWindow(QtWidgets.QMainWindow):
         except Exception as e:
             print("Fuzzy controller error:", e)
 
-    @pyqtSlot(str, str, str, str)
+    def on_packet(self, data):
+        t_ave_2nd = data['T']
+        self.h_ave = data['H']
+        self.t_ave_first = data['t_ave_first']
+
+        self.second_window.update_temperature_labels(*data['temps'], self.t_ave_first)
+        self.temp_drying_window.update_temperature_labels(*data['dry_temps'], t_ave_2nd)
+        self.third_window.update_humidity_labels(*data['hum'], self.h_ave)
+        self.update_labels(t_ave_2nd, self.h_ave, data['pwm2'], data['pwm1'])
+
     def update_labels(self, t_ave_2nd, h_ave, pwm_2, pwm_1):
         self.ui.label.setText(f"{t_ave_2nd} °C")
         self.ui.label_6.setText(f"{h_ave} %")
@@ -192,6 +198,10 @@ class FirstWindow(QtWidgets.QMainWindow):
     def go_to_second(self):
         self.second_window.show()
         self.hide()
+
+    def closeEvent(self, event):
+        self.serial_worker.stop()
+        super().closeEvent(event)
 
 
 if __name__ == "__main__":

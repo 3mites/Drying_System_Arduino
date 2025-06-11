@@ -1,5 +1,4 @@
 import sys
-import time
 import signal
 from PyQt5.QtCore import QMetaObject, Qt, Q_ARG, pyqtSlot, QTimer, QThread, pyqtSignal, QObject
 from PyQt5 import QtWidgets
@@ -48,12 +47,14 @@ class SerialReader(QObject):
     def process_line(self, line):
         if "pwm_2:" not in line:
             return
+
         parts = line.split()
         parsed = {}
         for part in parts:
             if ':' in part:
                 k, v = part.split(':', 1)
                 parsed[k.strip()] = v.strip()
+
         try:
             data = {
                 'T': parsed.get("t_ave_2nd", "0"),
@@ -83,10 +84,22 @@ class ProcessingWorker(QObject):
         try:
             estimator = MoistureEstimator(t_ave_2nd, h_ave)
             drying_seconds = estimator.get_drying_time_seconds()
+
             fuzzy = TemperatureFuzzyController()
-            adj = fuzzy.temperature_adjustment(t_ave_2nd, h_ave)
-            self.result_ready.emit(f"Dry Time: {drying_seconds:.1f} s")
-        except Exception:
+            _ = fuzzy.temperature_adjustment(t_ave_2nd, h_ave)
+
+            hours = int(drying_seconds // 3600)
+            minutes = int((drying_seconds % 3600) // 60)
+            if hours > 0:
+                result_text = f"Dry Time: {hours} hr {minutes} min"
+            else:
+                result_text = f"Dry Time: {minutes} min"
+
+            print("[ProcessingWorker] Calculated:", result_text)
+            self.result_ready.emit(result_text)
+
+        except Exception as e:
+            print("[ProcessingWorker] Error:", e)
             self.result_ready.emit("Dry Time: Error")
 
 
@@ -213,16 +226,18 @@ class FirstWindow(QtWidgets.QMainWindow):
         self.ui.label_6.setText(f"{h_ave} %")
         self.ui.label_12.setText(pwm_2)
         self.ui.label_11.setText(pwm_1)
+
         try:
             t_val = float(t_ave_2nd)
             h_val = float(h_ave)
             QMetaObject.invokeMethod(self.worker, "process", Qt.QueuedConnection,
                                      Q_ARG(float, t_val), Q_ARG(float, h_val))
-        except:
-            self.ui.label_8.setText("Dry Time: Error")
+        except Exception as e:
+            print("[update_labels] Float conversion failed:", e)
 
     @pyqtSlot(str)
     def on_drying_result(self, result_text):
+        print("[on_drying_result] ETA Result:", result_text)
         self.ui.label_8.setText(result_text)
 
     def go_to_second(self):

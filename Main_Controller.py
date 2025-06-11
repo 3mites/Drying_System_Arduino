@@ -1,13 +1,16 @@
 import sys
+import time
 import signal
 from PyQt5.QtCore import QMetaObject, Qt, Q_ARG, pyqtSlot, QTimer, QThread, pyqtSignal, QObject
 from PyQt5 import QtWidgets
+
 from FLC_MaizeDry import TemperatureFuzzyController
 from lcd_display import Ui_MainWindow as Ui_FirstWindow
 from lcd_display_temperature import Ui_MainWindow as Ui_SecondWindow
 from lcd_display_temperature_drying import Ui_MainWindow as Ui_TempDryingWindow
 from lcd_display_humidity import Ui_MainWindow as Ui_ThirdWindow
 from calculate_emc import MoistureEstimator
+
 import serial
 
 
@@ -28,10 +31,10 @@ class SerialReader(QObject):
 
     def start(self):
         if self.serial.is_open:
-            print("Serial port opened")
+            print("[DEBUG] Serial port opened")
             self.read_timer.start(100)
         else:
-            print("Failed to open serial port")
+            print("[ERROR] Failed to open serial port")
 
     def read_serial_data(self):
         try:
@@ -42,19 +45,17 @@ class SerialReader(QObject):
                     line, self.buffer = self.buffer.split(b"\n", 1)
                     self.process_line(line.decode(errors='ignore').strip())
         except Exception as e:
-            print("Serial read error:", e)
+            print("[ERROR] Serial read error:", e)
 
     def process_line(self, line):
         if "pwm_2:" not in line:
             return
-
         parts = line.split()
         parsed = {}
         for part in parts:
             if ':' in part:
                 k, v = part.split(':', 1)
                 parsed[k.strip()] = v.strip()
-
         try:
             data = {
                 'T': parsed.get("t_ave_2nd", "0"),
@@ -70,7 +71,7 @@ class SerialReader(QObject):
             if not self.packet_timer.isActive():
                 self.packet_timer.start()
         except Exception as e:
-            print("Parsing error:", e)
+            print("[ERROR] Parsing error:", e)
 
     def emit_packet(self):
         self.packet_ready.emit(self.last_packet_data)
@@ -82,25 +83,19 @@ class ProcessingWorker(QObject):
     @pyqtSlot(float, float)
     def process(self, t_ave_2nd, h_ave):
         try:
+            print(f"[DEBUG] Processing ETA with: {t_ave_2nd} {h_ave}")
             estimator = MoistureEstimator(t_ave_2nd, h_ave)
             drying_seconds = estimator.get_drying_time_seconds()
 
-            fuzzy = TemperatureFuzzyController()
-            _ = fuzzy.temperature_adjustment(t_ave_2nd, h_ave)
+            minutes, seconds = divmod(int(drying_seconds), 60)
+            hours, minutes = divmod(minutes, 60)
+            eta_text = f"ETA: {hours}h {minutes}m"
 
-            hours = int(drying_seconds // 3600)
-            minutes = int((drying_seconds % 3600) // 60)
-            if hours > 0:
-                result_text = f"Dry Time: {hours} hr {minutes} min"
-            else:
-                result_text = f"Dry Time: {minutes} min"
-
-            print("[ProcessingWorker] Calculated:", result_text)
-            self.result_ready.emit(result_text)
-
+            print(f"[DEBUG] ETA result: {eta_text}")
+            self.result_ready.emit(eta_text)
         except Exception as e:
-            print("[ProcessingWorker] Error:", e)
-            self.result_ready.emit("Dry Time: Error")
+            print(f"[ERROR] ETA calculation failed: {e}")
+            self.result_ready.emit("ETA: Error")
 
 
 class ThirdWindow(QtWidgets.QMainWindow):
@@ -185,9 +180,11 @@ class FirstWindow(QtWidgets.QMainWindow):
         super().__init__()
         self.ui = Ui_FirstWindow()
         self.ui.setupUi(self)
+
         self.second_window = SecondWindow(self)
         self.third_window = ThirdWindow(self)
         self.temp_drying_window = TempDryingWindow(self)
+
         self.ui.pushButton_2.clicked.connect(self.go_to_second)
         self.ui.pushButton.setEnabled(False)
 
@@ -202,7 +199,8 @@ class FirstWindow(QtWidgets.QMainWindow):
         QTimer.singleShot(1000, self.reader.start)
 
     def on_packet(self, data):
-        print("Received:", data)
+        print("[DEBUG] Received:", data)
+
         self.t_ave_first = data['t_ave_first']
         self.h_ave = data['H']
 
@@ -222,6 +220,7 @@ class FirstWindow(QtWidgets.QMainWindow):
 
     @pyqtSlot(str, str, str, str)
     def update_labels(self, t_ave_2nd, h_ave, pwm_2, pwm_1):
+        print(f"[DEBUG] update_labels() called with: {t_ave_2nd} {h_ave}")
         self.ui.label.setText(f"{t_ave_2nd} °C")
         self.ui.label_6.setText(f"{h_ave} %")
         self.ui.label_12.setText(pwm_2)
@@ -231,13 +230,15 @@ class FirstWindow(QtWidgets.QMainWindow):
             t_val = float(t_ave_2nd)
             h_val = float(h_ave)
             QMetaObject.invokeMethod(self.worker, "process", Qt.QueuedConnection,
-                                     Q_ARG(float, t_val), Q_ARG(float, h_val))
+                                     Q_ARG(float, float(t_val)),
+                                     Q_ARG(float, float(h_val)))
         except Exception as e:
-            print("[update_labels] Float conversion failed:", e)
+            print(f"[ERROR] update_labels failed to start process: {e}")
+            self.ui.label_8.setText("ETA: Error")
 
     @pyqtSlot(str)
     def on_drying_result(self, result_text):
-        print("[on_drying_result] ETA Result:", result_text)
+        print(f"[DEBUG] on_drying_result(): {result_text}")
         self.ui.label_8.setText(result_text)
 
     def go_to_second(self):

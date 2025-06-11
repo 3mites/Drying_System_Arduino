@@ -34,30 +34,39 @@ class SerialWorker(QThread):
             if not line:
                 continue
             buffer += line + " "
+
             if "pwm_2:" in buffer:
+                print("Raw buffer:", buffer)  # DEBUG: print raw buffer
                 parts = buffer.strip().split()
                 buffer = ""
-                if len(parts) < 15:
-                    continue
-                try:
-                    data = {
-                        'T': parts[11].split("t_ave_2nd:")[1],
-                        'H': parts[12].split("h_ave:")[1],
-                        'pwm2': parts[14].split("pwm_2:")[1],
-                        'pwm1': parts[13].split("pwm_1:")[1],
-                        'temps': [parts[i].split(f"T{i+1}:")[1] for i in range(4)],
-                        'dry_temps': [parts[i].split(f"T{i+5}:")[1] for i in range(4)],
-                        'hum': [parts[8].split("H1:")[1], parts[9].split("H2:")[1]],
-                        't_ave_first': parts[10].split("t_ave_first:")[1],
-                    }
-                    print("[DEBUG] Emitting parsed data...", data)
-                except Exception as e:
-                    continue
 
-                now = time.time()
-                if now - last_emit >= 1.0:
-                    self.packet_ready.emit(data)
-                    last_emit = now
+                parsed = {}
+
+                try:
+                    for part in parts:
+                        if ":" not in part:
+                            continue
+                        key, val = part.split(":", 1)
+                        parsed[key.strip()] = val.strip()
+
+                    data = {
+                        'T': parsed.get("t_ave_2nd", "0"),
+                        'H': parsed.get("h_ave", "0"),
+                        'pwm2': parsed.get("pwm_2", "0"),
+                        'pwm1': parsed.get("pwm_1", "0"),
+                        'temps': [parsed.get(f"T{i+1}", "0") for i in range(4)],
+                        'dry_temps': [parsed.get(f"T{i+5}", "0") for i in range(4)],
+                        'hum': [parsed.get("H1", "0"), parsed.get("H2", "0")],
+                        't_ave_first': parsed.get("t_ave_first", "0"),
+                    }
+
+                    print("Parsed data:", data)  # DEBUG: print parsed result
+                    now = time.time()
+                    if now - last_emit >= 1.0:
+                        self.packet_ready.emit(data)
+                        last_emit = now
+                except Exception as e:
+                    print("Parsing error:", e)
 
     def stop(self):
         self.running = False
@@ -80,7 +89,6 @@ class ThirdWindow(QtWidgets.QMainWindow):
 
     @pyqtSlot(str, str, str)
     def update_humidity_labels(self, h1, h2, h_ave):
-        print("[DEBUG] Updating ThirdWindow:", h1, h2, h_ave)
         self.ui.label_6.setText(f"{h1} %")
         self.ui.label_12.setText(f"{h2} %")
         self.ui.label_8.setText(f"Average: {h_ave} %")
@@ -107,7 +115,6 @@ class SecondWindow(QtWidgets.QMainWindow):
 
     @pyqtSlot(str, str, str, str, str)
     def update_temperature_labels(self, t1, t2, t3, t4, t_ave_first):
-        print("[DEBUG] Updating SecondWindow:", t1, t2, t3, t4, t_ave_first)
         self.ui.label.setText(f"{t1} °C")
         self.ui.label_6.setText(f"{t2} °C")
         self.ui.label_12.setText(f"{t3} °C")
@@ -136,7 +143,6 @@ class TempDryingWindow(QtWidgets.QMainWindow):
 
     @pyqtSlot(str, str, str, str, str)
     def update_temperature_labels(self, t5, t6, t7, t8, t_ave_2nd):
-        print("[DEBUG] Updating TempDryingWindow:", t5, t6, t7, t8, t_ave_2nd)
         self.ui.label.setText(f"{t5} °C")
         self.ui.label_6.setText(f"{t6} °C")
         self.ui.label_12.setText(f"{t7} °C")
@@ -176,26 +182,14 @@ class FirstWindow(QtWidgets.QMainWindow):
             print("Fuzzy controller error:", e)
 
     def on_packet(self, data):
-        print("[DEBUG] Packet received:", data)
-
+        print("Received packet:", data)
         t_ave_2nd = data['T']
         self.h_ave = data['H']
         self.t_ave_first = data['t_ave_first']
 
-        QMetaObject.invokeMethod(self.second_window, "update_temperature_labels", Qt.QueuedConnection,
-                                 Q_ARG(str, data['temps'][0]), Q_ARG(str, data['temps'][1]),
-                                 Q_ARG(str, data['temps'][2]), Q_ARG(str, data['temps'][3]),
-                                 Q_ARG(str, self.t_ave_first))
-
-        QMetaObject.invokeMethod(self.temp_drying_window, "update_temperature_labels", Qt.QueuedConnection,
-                                 Q_ARG(str, data['dry_temps'][0]), Q_ARG(str, data['dry_temps'][1]),
-                                 Q_ARG(str, data['dry_temps'][2]), Q_ARG(str, data['dry_temps'][3]),
-                                 Q_ARG(str, t_ave_2nd))
-
-        QMetaObject.invokeMethod(self.third_window, "update_humidity_labels", Qt.QueuedConnection,
-                                 Q_ARG(str, data['hum'][0]), Q_ARG(str, data['hum'][1]),
-                                 Q_ARG(str, self.h_ave))
-
+        self.second_window.update_temperature_labels(*data['temps'], self.t_ave_first)
+        self.temp_drying_window.update_temperature_labels(*data['dry_temps'], t_ave_2nd)
+        self.third_window.update_humidity_labels(*data['hum'], self.h_ave)
         self.update_labels(t_ave_2nd, self.h_ave, data['pwm2'], data['pwm1'])
 
     def update_labels(self, t_ave_2nd, h_ave, pwm_2, pwm_1):

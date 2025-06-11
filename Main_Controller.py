@@ -1,6 +1,5 @@
 import sys
 import serial
-import threading
 import time
 from PyQt5.QtCore import QMetaObject, Qt, Q_ARG, pyqtSlot, QTimer
 from PyQt5 import QtWidgets
@@ -10,6 +9,7 @@ from lcd_display_temperature import Ui_MainWindow as Ui_SecondWindow
 from lcd_display_temperature_drying import Ui_MainWindow as Ui_TempDryingWindow
 from lcd_display_humidity import Ui_MainWindow as Ui_ThirdWindow
 from calculate_emc import MoistureEstimator
+
 
 class ThirdWindow(QtWidgets.QMainWindow):
     def __init__(self, first_window):
@@ -22,14 +22,15 @@ class ThirdWindow(QtWidgets.QMainWindow):
         self.ui.pushButton.clicked.connect(self.go_to_temp_drying)
 
     def go_to_temp_drying(self):
-        QTimer.singleShot(0, self.first_window.temp_drying_window.show)
-        QTimer.singleShot(0, self.close)
+        self.first_window.temp_drying_window.show()
+        self.close()
 
     @pyqtSlot(str, str, str)
     def update_humidity_labels(self, h1, h2, h_ave):
         self.ui.label_6.setText(f"{h1} %")
         self.ui.label_12.setText(f"{h2} %")
         self.ui.label_8.setText(f"Average: {h_ave} %")
+
 
 class SecondWindow(QtWidgets.QMainWindow):
     def __init__(self, first_window):
@@ -43,12 +44,12 @@ class SecondWindow(QtWidgets.QMainWindow):
         self.ui.pushButton.clicked.connect(self.go_to_first)
 
     def go_to_third(self):
-        QTimer.singleShot(0, self.first_window.temp_drying_window.show)
-        QTimer.singleShot(0, self.close)
+        self.first_window.temp_drying_window.show()
+        self.close()
 
     def go_to_first(self):
-        QTimer.singleShot(0, self.first_window.show)
-        QTimer.singleShot(0, self.close)
+        self.first_window.show()
+        self.close()
 
     @pyqtSlot(str, str, str, str, str)
     def update_temperature_labels(self, t1, t2, t3, t4, t_ave_first):
@@ -57,6 +58,7 @@ class SecondWindow(QtWidgets.QMainWindow):
         self.ui.label_12.setText(f"{t3} °C")
         self.ui.label_11.setText(f"{t4} °C")
         self.ui.label_8.setText(f"Average: {t_ave_first} °C")
+
 
 class TempDryingWindow(QtWidgets.QMainWindow):
     def __init__(self, first_window):
@@ -70,12 +72,12 @@ class TempDryingWindow(QtWidgets.QMainWindow):
         self.ui.pushButton_2.clicked.connect(self.go_to_third)
 
     def go_to_second(self):
-        QTimer.singleShot(0, self.first_window.second_window.show)
-        QTimer.singleShot(0, self.close)
+        self.first_window.second_window.show()
+        self.close()
 
     def go_to_third(self):
-        QTimer.singleShot(0, self.first_window.third_window.show)
-        QTimer.singleShot(0, self.close)
+        self.first_window.third_window.show()
+        self.close()
 
     @pyqtSlot(str, str, str, str, str)
     def update_temperature_labels(self, t5, t6, t7, t8, t_ave_2nd):
@@ -85,12 +87,12 @@ class TempDryingWindow(QtWidgets.QMainWindow):
         self.ui.label_11.setText(f"{t8} °C")
         self.ui.label_8.setText(f"Average: {t_ave_2nd} °C")
 
+
 class FirstWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
         self.ui = Ui_FirstWindow()
         self.ui.setupUi(self)
-
         self.fuzzy_timer = QTimer(self)
         self.fuzzy_timer.timeout.connect(self.run_fuzzy_controller)
         self.fuzzy_timer.start(300000)
@@ -104,59 +106,41 @@ class FirstWindow(QtWidgets.QMainWindow):
         self.ui.pushButton.setEnabled(False)
         self.ui.pushButton_2.clicked.connect(self.go_to_second)
 
-        self.data_lock = threading.Lock()
-        self.latest_data = None
+        self.serial_buffer = ""
+        self.init_serial()
 
-        self.serial_thread = threading.Thread(target=self.read_serial_data)
-        self.serial_thread.daemon = True
-        self.serial_thread.start()
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.poll_serial_port)
+        self.timer.start(1000)  # Poll every 1 second
 
-        self.process_timer = QTimer()
-        self.process_timer.timeout.connect(self.process_latest_data)
-        self.process_timer.start(1000)
-
-    def go_to_second(self):
-        QTimer.singleShot(0, self.second_window.show)
-        QTimer.singleShot(0, self.hide)
-
-    def run_fuzzy_controller(self):
+    def init_serial(self):
         try:
-            fuzzy_control = TemperatureFuzzyController()
-            adjustment = fuzzy_control.temperature_adjustment(self.t_ave_first, self.h_ave)
-            if hasattr(self, 'ser') and self.ser.is_open:
-                self.ser.write(f"ADJ:{adjustment}\n".encode())
+            self.ser = serial.Serial('COM6', 9600, timeout=1)
         except Exception as e:
-            print("Fuzzy controller error:", e)
+            print("Serial init failed:", e)
+            self.ser = None
 
-    def read_serial_data(self):
-        try:
-            self.ser = serial.Serial('/dev/ttyUSB0', 9600, timeout=1)
-            buffer = ""
-            while True:
-                line = self.ser.readline().decode(errors='ignore').strip()
-                if not line:
-                    continue
-                buffer += line + " "
-                if "pwm_2:" in buffer:
-                    with self.data_lock:
-                        self.latest_data = buffer.strip()
-                    buffer = ""
-        except serial.SerialException as e:
-            print("Serial connection failed:", e)
-
-    def process_latest_data(self):
-        with self.data_lock:
-            data = self.latest_data
-            self.latest_data = None
-
-        if not data:
+    def poll_serial_port(self):
+        if not self.ser or not self.ser.is_open:
             return
 
         try:
-            parts = data.strip().split()
-            if len(parts) < 15:
-                return
+            line = self.ser.readline().decode(errors='ignore').strip()
+            if line:
+                self.serial_buffer += line + " "
+                if "pwm_2:" in self.serial_buffer:
+                    self.handle_serial_packet(self.serial_buffer.strip())
+                    self.serial_buffer = ""
+        except Exception as e:
+            print("Polling error:", e)
 
+    def handle_serial_packet(self, buffer):
+        parts = buffer.split()
+        if len(parts) < 15:
+            print("Incomplete packet:", buffer)
+            return
+
+        try:
             t1 = parts[0].split("T1:")[1]
             t2 = parts[1].split("T2:")[1]
             t3 = parts[2].split("T3:")[1]
@@ -179,7 +163,16 @@ class FirstWindow(QtWidgets.QMainWindow):
             self.update_labels(t_ave_2nd, self.h_ave, pwm_2, pwm_1)
 
         except Exception as e:
-            print("Parsing/UI update error:", e)
+            print("Packet parse error:", e)
+
+    def run_fuzzy_controller(self):
+        try:
+            fuzzy_control = TemperatureFuzzyController()
+            adjustment = fuzzy_control.temperature_adjustment(self.t_ave_first, self.h_ave)
+            if hasattr(self, 'ser') and self.ser.is_open:
+                self.ser.write(f"ADJ:{adjustment}\n".encode())
+        except Exception as e:
+            print("Fuzzy controller error:", e)
 
     @pyqtSlot(str, str, str, str)
     def update_labels(self, t_ave_2nd, h_ave, pwm_2, pwm_1):
@@ -195,6 +188,11 @@ class FirstWindow(QtWidgets.QMainWindow):
         except:
             fallback = self.last_valid_drying_seconds or "Error"
             self.ui.label_8.setText(f"Dry Time: {fallback} s")
+
+    def go_to_second(self):
+        self.second_window.show()
+        self.hide()
+
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)

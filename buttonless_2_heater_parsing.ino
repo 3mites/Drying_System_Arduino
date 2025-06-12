@@ -169,7 +169,12 @@ unsigned int averageColorFrequency(bool s2Val, bool s3Val, int samples) {
 
 
 bool isDryCorn(int r, int g, int b) {
-  return (r >= DRY_RED_MIN && r <= DRY_RED_MAX) && (g >= DRY_GREEN_MIN && g <= DRY_GREEN_MAX) && (b >= DRY_BLUE_MIN && b <= DRY_BLUE_MAX);
+  if ((r >= DRY_RED_MIN && r <= DRY_RED_MAX) &&
+      (g >= DRY_GREEN_MIN && g <= DRY_GREEN_MAX) &&
+      (b >= DRY_BLUE_MIN && b <= DRY_BLUE_MAX)) {
+    return true;
+  }
+  return false;
 }
 
 void setup() {
@@ -267,7 +272,7 @@ void controlFan() {
     pwm_1 = 0;
 
     analogWrite(Gate3, 0);
-    pwm_2 = 0;
+    pwm_2 = highPWM;
     fanSpeedLabel = "OFF";
   }
 
@@ -296,6 +301,13 @@ void loop() {
   greenFrequency = averageColorFrequency(HIGH, HIGH, NUM_SAMPLES);
   blueFrequency = averageColorFrequency(LOW, HIGH, NUM_SAMPLES);
   bool dry = isDryCorn(redFrequency, greenFrequency, blueFrequency);
+
+  // ----- Check Dryness -----
+  if (isDryCorn(redFrequency, greenFrequency, blueFrequency)) {
+    Serial.println("DRY");
+    Serial.println("Dry corn detected! Exiting loop.");
+    while (true);  // Stops execution
+  }
 
   // Handle Serial Input
   while (Serial.available()) {
